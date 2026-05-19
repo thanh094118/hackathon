@@ -1,0 +1,182 @@
+sqli:
+  - id: sqli_or_true
+    description: SQL Injection boolean true condition
+    field: request
+    type: regex
+    pattern: >-
+      ('|%27|")\s*(or|and)\s+\d+\s*=\s*\d+
+    score: 35
+    severity: high
+
+  - id: sqli_union_select
+    description: SQL Injection UNION SELECT keyword
+    field: request
+    type: regex
+    pattern: >-
+      union\s+(all\s+)?select
+    score: 40
+    severity: high
+
+  - id: sqli_information_schema
+    description: SQL metadata table probing
+    field: request
+    type: contains
+    pattern: information_schema
+    score: 35
+    severity: high
+
+  - id: sqli_time_based
+    description: Time-based SQL Injection payload
+    field: request
+    type: regex
+    pattern: >-
+      (sleep\s*\(|benchmark\s*\(|waitfor\s+delay)
+    score: 40
+    severity: high
+
+  - id: sqli_comment
+    description: SQL comment sequence
+    field: request
+    type: regex
+    pattern: >-
+      (--|#|/\*)
+    score: 15
+    severity: medium
+
+xss:
+  - id: xss_script_tag
+    description: Script tag in request
+    field: request
+    type: contains
+    pattern: <script
+    score: 40
+    severity: high
+
+  - id: xss_event_handler
+    description: JavaScript event handler in request
+    field: request
+    type: regex
+    pattern: >-
+      on(error|load|click|mouseover|focus)\s*=
+    score: 35
+    severity: high
+
+  - id: xss_javascript_uri
+    description: javascript URI scheme
+    field: request
+    type: contains
+    pattern: 'javascript:'
+    score: 30
+    severity: medium
+
+  - id: xss_cookie_theft
+    description: document.cookie access
+    field: request
+    type: contains
+    pattern: document.cookie
+    score: 35
+    severity: high
+
+path_traversal:
+  - id: traversal_dotdot
+    description: Directory traversal dot-dot-slash
+    field: request
+    type: regex
+    pattern: >-
+      (\.\./|\.\.\\)
+    score: 35
+    severity: high
+
+  - id: traversal_encoded_dotdot
+    description: URL encoded traversal sequence
+    field: request
+    type: regex
+    pattern: >-
+      (%2e%2e|%252e%252e)
+    score: 35
+    severity: high
+
+  - id: traversal_linux_passwd
+    description: Linux passwd file access attempt
+    field: request
+    type: contains
+    pattern: /etc/passwd
+    score: 45
+    severity: high
+
+  - id: traversal_windows_files
+    description: Windows sensitive file access attempt
+    field: request
+    type: regex
+    pattern: >-
+      (boot\.ini|win\.ini|windows/win\.ini|windows\\win\.ini)
+    score: 40
+    severity: high
+
+scanner:
+  - id: scanner_sqlmap
+    description: sqlmap user-agent
+    field: user_agent
+    type: contains
+    pattern: sqlmap
+    score: 45
+    severity: high
+
+  - id: scanner_nikto
+    description: Nikto user-agent
+    field: user_agent
+    type: contains
+    pattern: nikto
+    score: 40
+    severity: high
+
+  - id: scanner_acunetix
+    description: Acunetix user-agent
+    field: user_agent
+    type: contains
+    pattern: acunetix
+    score: 40
+    severity: high
+
+  - id: scanner_gobuster
+    description: Gobuster user-agent
+    field: user_agent
+    type: contains
+    pattern: gobuster
+    score: 35
+    severity: medium
+
+  - id: scanner_ffuf
+    description: ffuf user-agent
+    field: user_agent
+    type: contains
+    pattern: ffuf
+    score: 35
+    severity: medium
+
+  - id: scanner_nmap
+    description: Nmap user-agent
+    field: user_agent
+    type: contains
+    pattern: nmap
+    score: 30
+    severity: medium
+
+sensitive_paths:
+  - id: sensitive_env_file
+    description: Attempt to access environment file
+    field: uri
+    type: regex
+    pattern: >-
+      (^|/)\.env$
+    score: 35
+    severity: high
+
+  - id: sensitive_admin_path
+    description: Access to common admin path
+    field: uri
+    type: regex
+    pattern: >-
+      (/admin|/wp-admin|/phpmyadmin)
+    score: 15
+    severity: low

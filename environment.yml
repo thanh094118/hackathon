@@ -1,0 +1,15 @@
+name: vdt
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pandas
+  - numpy
+  - scikit-learn
+  - pyyaml
+  - python-dateutil
+  - tqdm
+  - joblib
+  - pytest
+  - pip
