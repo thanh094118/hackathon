@@ -2,7 +2,7 @@ import argparse
 import csv
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from src.collector.file_collector import FileCollector
 from src.detection.rule_detector import RuleDetector
@@ -14,12 +14,17 @@ from src.parser.nginx_parser import NginxParser
 from src.preprocessor.request_preprocessor import RequestPreprocessor
 
 
+DEFAULT_INPUT_DIR = "input"
+DEFAULT_OUTPUT_DIR = "outputs"
+
+
 def get_parser(server_type: str):
-    if server_type == "apache":
+    normalized = server_type.lower()
+    if normalized == "apache":
         return ApacheParser()
-    if server_type == "nginx":
+    if normalized == "nginx":
         return NginxParser()
-    if server_type == "iis":
+    if normalized == "iis":
         return IISParser()
     raise ValueError(f"Unsupported server type: {server_type}")
 
@@ -86,82 +91,134 @@ def build_alert(record: Dict, rule_result: Dict) -> Dict:
     }
 
 
-def run_pipeline(input_path: str, server_type: str, output_dir: str, rules_path: str) -> None:
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
+def process_one_log(
+    input_log_path: Path,
+    server_type: str,
+    output_path: Path,
+    detector: RuleDetector,
+    normalizer: Normalizer,
+    preprocessor: RequestPreprocessor,
+    feature_extractor: FeatureExtractor,
+) -> Optional[Dict]:
+    try:
+        parser = get_parser(server_type)
+    except ValueError:
+        print(f"[!] Skip unsupported server type '{server_type}' for: {input_log_path}")
+        return None
 
-    # Module 1: Collector
-    collector = FileCollector(input_path)
-    lines = collector.read_all()
+    reader = FileCollector(str(input_log_path))
+    parsed_records = parser.parse_lines(reader.read_lines())
 
-    # Module 2: Parser
-    parser = get_parser(server_type)
-    parsed_records = parser.parse_lines(lines)
-
-    # Module 3: Normalizer
-    normalizer = Normalizer()
     normalized_records = [normalizer.normalize(record) for record in parsed_records]
-
-    # Module 4: Request Preprocessor
-    preprocessor = RequestPreprocessor()
     preprocessed_records = [preprocessor.preprocess(record) for record in normalized_records]
 
-    # Module 5: Rule-based Detector
-    detector = RuleDetector(rules_path=rules_path)
     detected_records = []
     alerts = []
-
     for record in preprocessed_records:
         rule_result = detector.detect(record)
         enriched = dict(record)
         enriched.update(rule_result)
         detected_records.append(enriched)
-
         if rule_result.get("rule_label") in {"suspicious", "malicious"}:
             alerts.append(build_alert(record, rule_result))
 
-    # Module 6: Feature Extractor
-    feature_extractor = FeatureExtractor()
     processed_records = [feature_extractor.enrich(record) for record in detected_records]
 
     write_jsonl(normalized_records, output_path / "normalized_logs.jsonl")
     write_csv(normalized_records, output_path / "normalized_logs.csv")
-
     write_jsonl(processed_records, output_path / "processed_logs.jsonl")
     write_csv([flatten_for_csv(r) for r in processed_records], output_path / "processed_logs.csv")
-
     write_jsonl(alerts, output_path / "alerts.jsonl")
     write_csv([flatten_for_csv(a) for a in alerts], output_path / "alerts.csv")
 
-    print("[+] Web Log AI Detector - MVP CLI Pipeline")
-    print(f"[+] Input file       : {input_path}")
+    parse_errors = sum(1 for r in normalized_records if r.get("parse_error"))
+    suspicious = sum(1 for r in detected_records if r.get("rule_label") == "suspicious")
+    malicious = sum(1 for r in detected_records if r.get("rule_label") == "malicious")
+
+    print(f"[+] Processed        : {input_log_path}")
     print(f"[+] Server type      : {server_type}")
-    print(f"[+] Rules file       : {rules_path}")
-    print(f"[+] Raw lines        : {len(lines)}")
     print(f"[+] Parsed records   : {len(parsed_records)}")
-    print(f"[+] Parse errors     : {sum(1 for r in normalized_records if r.get('parse_error'))}")
-    print(f"[+] Suspicious       : {sum(1 for r in detected_records if r.get('rule_label') == 'suspicious')}")
-    print(f"[+] Malicious        : {sum(1 for r in detected_records if r.get('rule_label') == 'malicious')}")
+    print(f"[+] Parse errors     : {parse_errors}")
+    print(f"[+] Suspicious       : {suspicious}")
+    print(f"[+] Malicious        : {malicious}")
     print(f"[+] Alerts           : {len(alerts)}")
     print(f"[+] Output dir       : {output_path}")
+
+    return {
+        "parsed_records": len(parsed_records),
+        "parse_errors": parse_errors,
+        "suspicious": suspicious,
+        "malicious": malicious,
+        "alerts": len(alerts),
+    }
+
+
+def run_pipeline(rules_path: str) -> None:
+    collector = FileCollector(DEFAULT_INPUT_DIR)
+    jobs = collector.collect_jobs(DEFAULT_OUTPUT_DIR)
+
+    if not jobs:
+        print(f"[!] No access logs found in {DEFAULT_INPUT_DIR}/ (pattern: access*.log)")
+        return
+
+    detector = RuleDetector(rules_path=rules_path)
+    normalizer = Normalizer()
+    preprocessor = RequestPreprocessor()
+    feature_extractor = FeatureExtractor()
+
+    totals = {
+        "files": 0,
+        "parsed_records": 0,
+        "parse_errors": 0,
+        "suspicious": 0,
+        "malicious": 0,
+        "alerts": 0,
+    }
+
+    print("[+] Web Log AI Detector - Batch Pipeline")
+    print(f"[+] Input root       : {DEFAULT_INPUT_DIR}/")
+    print(f"[+] Output root      : {DEFAULT_OUTPUT_DIR}/")
+    print(f"[+] Rules file       : {rules_path}")
+    print(f"[+] Discovered files : {len(jobs)}")
+
+    for job in jobs:
+        metrics = process_one_log(
+            input_log_path=job.input_log_path,
+            server_type=job.server_type,
+            output_path=job.output_dir,
+            detector=detector,
+            normalizer=normalizer,
+            preprocessor=preprocessor,
+            feature_extractor=feature_extractor,
+        )
+
+        if metrics is None:
+            continue
+
+        totals["files"] += 1
+        totals["parsed_records"] += metrics["parsed_records"]
+        totals["parse_errors"] += metrics["parse_errors"]
+        totals["suspicious"] += metrics["suspicious"]
+        totals["malicious"] += metrics["malicious"]
+        totals["alerts"] += metrics["alerts"]
+
+    print("[+] Summary")
+    print(f"[+] Files processed  : {totals['files']}")
+    print(f"[+] Parsed records   : {totals['parsed_records']}")
+    print(f"[+] Parse errors     : {totals['parse_errors']}")
+    print(f"[+] Suspicious total : {totals['suspicious']}")
+    print(f"[+] Malicious total  : {totals['malicious']}")
+    print(f"[+] Alerts total     : {totals['alerts']}")
     print("[+] B3 completed: Module 4 + Module 5 + Module 6 are working.")
     print("[!] Module 7 AI/NLP is intentionally not implemented yet.")
 
 
 def main():
-    cli = argparse.ArgumentParser(description="Web Log AI Detector - MVP CLI Pipeline")
-    cli.add_argument("--input", required=True, help="Path to access log file")
-    cli.add_argument("--server", required=True, choices=["apache", "nginx", "iis"], help="Web server log type")
-    cli.add_argument("--output", default="outputs/", help="Output directory")
+    cli = argparse.ArgumentParser(description="Web Log AI Detector - Batch Pipeline")
     cli.add_argument("--rules", default="data/labels/attack_patterns.yaml", help="Path to YAML rule file")
     args = cli.parse_args()
 
-    run_pipeline(
-        input_path=args.input,
-        server_type=args.server,
-        output_dir=args.output,
-        rules_path=args.rules,
-    )
+    run_pipeline(rules_path=args.rules)
 
 
 if __name__ == "__main__":

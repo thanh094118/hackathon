@@ -19,8 +19,12 @@ MVP CLI Pipeline for parsing Apache/Nginx/IIS access logs and detecting suspicio
 ## MVP Usage
 
 ```bash
-python main.py --input data/raw/apache_access.log --server apache --output outputs/
+python main.py
 ```
+
+Default paths:
+- Input root: `input/` (auto-scan all `access*.log`)
+- Output root: `outputs/`
 
 ## Conda Environment
 
