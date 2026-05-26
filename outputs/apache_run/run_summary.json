@@ -1,0 +1,48 @@
+{
+  "input_path": "data/raw/apache/access.log",
+  "server_type": "apache",
+  "rules_path": "data/labels/attack_patterns.yaml",
+  "output_dir": "outputs/apache_run",
+  "counts": {
+    "raw_lines": 33,
+    "parsed_logs": 33,
+    "normalized_logs": 33,
+    "preprocessed_requests": 33,
+    "scored_records": 33,
+    "alerts": 2,
+    "parse_errors": 0
+  },
+  "labels": {
+    "benign": 31,
+    "suspicious": 0,
+    "malicious": 2
+  },
+  "top_attack_types": [
+    [
+      "xss",
+      1
+    ],
+    [
+      "path_traversal",
+      1
+    ]
+  ],
+  "top_matched_rule_ids": [
+    [
+      "xss_script_tag",
+      1
+    ],
+    [
+      "xss_cookie_theft",
+      1
+    ],
+    [
+      "traversal_dotdot",
+      1
+    ],
+    [
+      "traversal_linux_passwd",
+      1
+    ]
+  ]
+}

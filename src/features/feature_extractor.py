@@ -52,8 +52,8 @@ class FeatureExtractor:
             "equals_count": request.count("="),
             "hyphen_count": request.count("-"),
             "entropy": round(self._entropy(request), 4),
-            "status_code": int(record.get("status_code") or 0),
-            "response_size": int(record.get("response_size") or 0),
+            "status_code": self._to_int(record.get("status_code")),
+            "response_size": self._to_int(record.get("response_size")),
             "has_sql_keyword": int(self._contains_any(request, self.SQL_KEYWORDS)),
             "has_xss_keyword": int(self._contains_any(request, self.XSS_KEYWORDS)),
             "has_path_traversal": int(self._contains_any(request, self.TRAVERSAL_KEYWORDS)),
@@ -91,6 +91,13 @@ class FeatureExtractor:
         ]
         user_agent = user_agent.lower()
         return any(scanner in user_agent for scanner in scanners)
+
+    @staticmethod
+    def _to_int(value) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
 
     @staticmethod
     def _entropy(value: str) -> float:

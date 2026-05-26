@@ -16,6 +16,7 @@ class Normalizer:
         "timestamp",
         "source_ip",
         "http_method",
+        "original_url",
         "uri",
         "query_string",
         "status_code",
@@ -25,6 +26,10 @@ class Normalizer:
         "server_type",
         "raw_log",
         "line_number",
+        "parse_status",
+        "normalize_status",
+        "parse_error",
+        "error_message",
     ]
 
     def normalize(self, parsed_record: Dict) -> Dict:
@@ -38,6 +43,7 @@ class Normalizer:
             ),
             "source_ip": parsed_record.get("source_ip"),
             "http_method": self._upper_or_none(parsed_record.get("http_method")),
+            "original_url": parsed_record.get("original_url") or raw_uri,
             "uri": uri,
             "query_string": query_string,
             "status_code": self._to_int(parsed_record.get("status_code")),
@@ -47,8 +53,11 @@ class Normalizer:
             "server_type": parsed_record.get("server_type"),
             "raw_log": parsed_record.get("raw_log"),
             "line_number": parsed_record.get("line_number"),
+            "parse_status": parsed_record.get("parse_status", "success"),
+            "normalize_status": "error" if bool(parsed_record.get("parse_error", False)) else "success",
             "parse_error": bool(parsed_record.get("parse_error", False)),
             "error_message": parsed_record.get("error_message"),
+            "event_id": parsed_record.get("event_id"),
         }
 
         return normalized

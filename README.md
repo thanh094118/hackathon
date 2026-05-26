@@ -1,66 +1,72 @@
-# Web Log AI Detector
+# Web Server Log Parser + Rule-Based Attack Detection
 
-MVP CLI Pipeline for parsing Apache/Nginx/IIS access logs and detecting suspicious web requests using rule-based detection and simple AI/NLP techniques.
+This project is a non-ML cybersecurity pipeline for parsing web access logs and detecting suspicious requests with YAML rules plus hand-crafted features.
 
-## Main Features
+Current phase scope:
+- Included: collector, parser, normalizer, request preprocessor, rule detector, feature extraction, risk scoring, exporting, markdown reporting.
+- Not included yet: AI/NLP or ML training/detection (TF-IDF, Logistic Regression, SVM, Isolation Forest, deep learning, vector search).
 
-- Parse Apache, Nginx, and IIS access logs
-- Normalize logs into a common schema
-- Detect common web attacks:
-  - SQL Injection
-  - XSS
-  - Path Traversal
-  - Scanner activity
-- Extract request features
-- Apply AI/NLP-based detection
-- Export alerts and reports
-- Prepare output for SIEM integration
+## Environment
 
-## MVP Usage
-
-```bash
-python main.py
-```
-
-Default paths:
-- Input root: `input/` (auto-scan all `access*.log`)
-- Output root: `outputs/`
-
-## Conda Environment
-
-Create the environment:
+Conda:
 
 ```bash
 conda env create -f environment.yml
+conda activate vdt
 ```
 
-Activate it:
+Pip:
 
 ```bash
-conda activate weblog-ai-detector
-```
-
-Or create manually:
-
-```bash
-conda create -n weblog-ai-detector python=3.11 -y
-conda activate weblog-ai-detector
 pip install -r requirements.txt
 ```
 
-## Project Structure
+## Run The Pipeline
 
-```text
-src/
-├── collector/
-├── parser/
-├── normalizer/
-├── preprocessor/
-├── detection/
-├── features/
-├── models/
-├── scoring/
-├── reporting/
-├── exporters/
-└── utils/
+Expected CLI:
+
+```bash
+python -m src.main --input data/raw/apache/access.log --server-type apache --output-dir outputs/apache_run
+```
+
+With explicit rules file:
+
+```bash
+python -m src.main --input input/Apache/access1.log --server-type apache --output-dir outputs/apache_run --rules data/labels/attack_patterns.yaml
+```
+
+## Required Arguments
+
+- `--input`: path to one access log file
+- `--server-type`: `apache`, `nginx`, or `iis`
+- `--output-dir`: output directory for one run
+- `--rules` (optional): YAML rule file path (default: `data/labels/attack_patterns.yaml`)
+
+## Output Files
+
+One run writes these artifacts into `--output-dir`:
+
+- `raw_lines.jsonl`
+- `parsed_logs.jsonl`
+- `normalized_logs.jsonl`
+- `normalized_logs.csv`
+- `preprocessed_requests.jsonl`
+- `features.csv`
+- `alerts.jsonl`
+- `alerts.csv`
+- `report.md`
+- `run_summary.json`
+
+## Tests
+
+Run all tests:
+
+```bash
+pytest -q
+```
+
+Cache-free run:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 pytest -q -p no:cacheprovider
 ```

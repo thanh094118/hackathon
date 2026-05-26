@@ -69,7 +69,58 @@ class RuleDetector:
         if not isinstance(data, dict):
             raise ValueError(f"Invalid rule YAML format: {path}")
 
+        self._validate_rules(data, path)
         return data
+
+    def _validate_rules(self, rules_data: Dict, path: Path) -> None:
+        valid_types = {"contains", "regex"}
+        valid_severities = {"none", "low", "medium", "high", "critical"}
+        seen_ids = set()
+
+        for category, rules in rules_data.items():
+            if not isinstance(rules, list):
+                raise ValueError(f"Invalid rule group '{category}' in {path}: expected list")
+
+            for idx, rule in enumerate(rules, start=1):
+                if not isinstance(rule, dict):
+                    raise ValueError(f"Invalid rule at {category}[{idx}] in {path}: expected object")
+
+                required = {"id", "field", "type", "pattern", "score", "severity"}
+                missing = [key for key in required if key not in rule]
+                if missing:
+                    raise ValueError(f"Rule {category}[{idx}] missing required fields: {missing}")
+
+                rule_id = str(rule.get("id"))
+                if not rule_id:
+                    raise ValueError(f"Rule {category}[{idx}] has empty id")
+                if rule_id in seen_ids:
+                    raise ValueError(f"Duplicate rule id detected: {rule_id}")
+                seen_ids.add(rule_id)
+
+                rule_type = str(rule.get("type")).lower()
+                if rule_type not in valid_types:
+                    raise ValueError(f"Rule {rule_id} has invalid type: {rule_type}")
+
+                severity = str(rule.get("severity")).lower()
+                if severity not in valid_severities:
+                    raise ValueError(f"Rule {rule_id} has invalid severity: {severity}")
+
+                try:
+                    score = int(rule.get("score"))
+                except (TypeError, ValueError):
+                    raise ValueError(f"Rule {rule_id} has non-integer score") from None
+                if score < 0:
+                    raise ValueError(f"Rule {rule_id} has negative score")
+
+                pattern = str(rule.get("pattern"))
+                if not pattern:
+                    raise ValueError(f"Rule {rule_id} has empty pattern")
+
+                if rule_type == "regex":
+                    try:
+                        re.compile(pattern, flags=re.IGNORECASE)
+                    except re.error as exc:
+                        raise ValueError(f"Rule {rule_id} has invalid regex pattern: {exc}") from None
 
     def _match_rule(self, record: Dict, rule: Dict) -> bool:
         field = rule.get("field", "request")
@@ -84,7 +135,10 @@ class RuleDetector:
             return str(pattern).lower() in target.lower()
 
         if rule_type == "regex":
-            return re.search(str(pattern), target, flags=re.IGNORECASE) is not None
+            try:
+                return re.search(str(pattern), target, flags=re.IGNORECASE) is not None
+            except re.error:
+                return False
 
         return False
 

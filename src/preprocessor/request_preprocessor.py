@@ -20,9 +20,9 @@ class RequestPreprocessor:
         user_agent = record.get("user_agent") or ""
         http_method = record.get("http_method") or ""
 
-        decoded_uri = self._safe_decode(uri)
-        decoded_query = self._safe_decode(query_string)
-        decoded_user_agent = self._safe_decode(user_agent)
+        decoded_uri, uri_depth, uri_changed = self._safe_decode(uri)
+        decoded_query, query_depth, query_changed = self._safe_decode(query_string)
+        decoded_user_agent, ua_depth, ua_changed = self._safe_decode(user_agent)
 
         normalized_uri = self._normalize_text(decoded_uri)
         normalized_query = self._normalize_text(decoded_query)
@@ -49,20 +49,30 @@ class RequestPreprocessor:
             "normalized_user_agent": normalized_user_agent,
             "normalized_url": normalized_url,
             "normalized_request": normalized_request,
+            "decode_depth_uri": uri_depth,
+            "decode_depth_query_string": query_depth,
+            "decode_depth_user_agent": ua_depth,
+            "decode_depth": max(uri_depth, query_depth, ua_depth),
+            "decode_changed_uri": uri_changed,
+            "decode_changed_query_string": query_changed,
+            "decode_changed_user_agent": ua_changed,
+            "decode_changed": bool(uri_changed or query_changed or ua_changed),
         })
         return enriched
 
-    def _safe_decode(self, value: str, max_rounds: int = 2) -> str:
+    def _safe_decode(self, value: str, max_rounds: int = 2) -> tuple[str, int, bool]:
         if not value:
-            return ""
+            return "", 0, False
 
         decoded = str(value)
+        depth = 0
         for _ in range(max_rounds):
             new_value = unquote_plus(decoded)
             if new_value == decoded:
                 break
             decoded = new_value
-        return decoded
+            depth += 1
+        return decoded, depth, depth > 0
 
     def _normalize_text(self, value: str) -> str:
         if not value:

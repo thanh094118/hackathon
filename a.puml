@@ -1,0 +1,33 @@
+@startuml
+!theme plain
+title Log Analysis Pipeline Architecture
+
+start
+
+:access.log;
+
+:[1] Log Collector;
+:raw log lines;
+
+:[2] Parser;
+:parsed dictionary;
+
+:[3] Normalizer;
+:common schema;
+
+:[4] Request Preprocessor;
+:normalized request fields;
+
+split
+    -left-> [5.1] Rule-based Detector;
+    :rule alerts;
+    -> [6] Risk Scoring & Post-processing;
+    -> [7] Exporter / Report;
+    stop
+split again
+    -right-> [5.2] Feature Extractor;
+    :features.csv;
+    stop
+end split
+
+@enduml
