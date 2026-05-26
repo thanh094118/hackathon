@@ -99,6 +99,29 @@ def to_raw_line_records(lines: List[str], server_type: str) -> List[Dict]:
     return records
 
 
+def to_raw_line_records_with_metadata(read_records: List[Dict], server_type: str) -> List[Dict]:
+    records: List[Dict] = []
+    for idx, item in enumerate(read_records, start=1):
+        line = item.get("line", "")
+        digest = hashlib.sha1(str(line).encode("utf-8", errors="ignore")).hexdigest()[:12]
+        records.append({
+            "event_id": f"{server_type.lower()}:{idx}:{digest}",
+            "line_number": idx,
+            "server_type": server_type.lower(),
+            "raw_line": line,
+            "parse_status": "raw",
+            "parse_error": False,
+            "error_message": None,
+            "encoding_used": item.get("encoding_used"),
+            "decode_error": bool(item.get("decode_error", False)),
+            "had_bom": bool(item.get("had_bom", False)),
+            "was_continuation_merged": bool(item.get("was_continuation_merged", False)),
+            "physical_line_start": item.get("physical_line_start"),
+            "physical_line_end": item.get("physical_line_end"),
+        })
+    return records
+
+
 def build_feature_row(record: Dict) -> Dict:
     row = {
         "line_number": record.get("line_number"),
@@ -176,8 +199,9 @@ def run_pipeline(
     alert_csv_exporter = CSVExporter(preferred_fieldnames=ALERT_PREFERRED_COLUMNS)
     markdown_exporter = MarkdownExporter()
 
-    raw_lines = collector.read_all()
-    raw_line_records = to_raw_line_records(raw_lines, server_type)
+    read_records = collector.read_records()
+    raw_lines = [item.get("line", "") for item in read_records]
+    raw_line_records = to_raw_line_records_with_metadata(read_records, server_type)
     jsonl_exporter.export(raw_line_records, output_path / "raw_lines.jsonl")
 
     parsed_logs = parser.parse_lines(raw_lines)
@@ -227,6 +251,11 @@ def run_pipeline(
         scored_records=scored_records,
         alerts=alerts,
     )
+    summary["collector"] = {
+        "decode_error_records": sum(1 for row in raw_line_records if row.get("decode_error")),
+        "had_bom_records": sum(1 for row in raw_line_records if row.get("had_bom")),
+        "continuation_merged_records": sum(1 for row in raw_line_records if row.get("was_continuation_merged")),
+    }
 
     report_text = ReportGenerator().generate(summary, alerts)
     markdown_exporter.export(report_text, output_path / "report.md")
@@ -270,6 +299,8 @@ def main() -> None:
     print(f"[+] Parsed logs: {counts.get('parsed_logs', 0)}")
     print(f"[+] Parse errors: {counts.get('parse_errors', 0)}")
     print(f"[+] Alerts: {counts.get('alerts', 0)}")
+    collector_info = summary.get("collector", {})
+    print(f"[+] Decode fallback records: {collector_info.get('decode_error_records', 0)}")
     print(f"[+] Output dir: {summary.get('output_dir')}")
 
 

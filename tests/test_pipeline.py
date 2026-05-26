@@ -54,6 +54,21 @@ def test_pipeline_cli_generates_expected_outputs(tmp_path: Path):
     assert any(row["parse_status"] == "error" for row in parsed)
     assert all("event_id" in row for row in parsed)
 
+    raw_rows = [
+        json.loads(line)
+        for line in (output_dir / "raw_lines.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert raw_rows
+    assert all("encoding_used" in row for row in raw_rows)
+    assert all("decode_error" in row for row in raw_rows)
+    assert all("had_bom" in row for row in raw_rows)
+    assert all("was_continuation_merged" in row for row in raw_rows)
+    assert all("physical_line_start" in row for row in raw_rows)
+    assert all("physical_line_end" in row for row in raw_rows)
+
     summary = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
     assert summary["counts"]["raw_lines"] == 2
     assert summary["counts"]["parsed_logs"] == 2
+    assert "collector" in summary
+    assert "decode_error_records" in summary["collector"]

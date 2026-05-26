@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Iterator, List, Tuple
+from typing import Dict, Iterator, List, Tuple
 
 from src.collector.collect_flow import AccessLogCollectFlow, AccessLogJob
 from src.collector.read_flow import AccessLogReadFlow
@@ -25,6 +25,9 @@ class FileCollector:
 
     def read_all(self) -> List[str]:
         return AccessLogReadFlow(self.input_path).read_all()
+
+    def read_records(self) -> List[Dict]:
+        return AccessLogReadFlow(self.input_path).read_records()
 
     def collect_jobs(self, output_root: str) -> List[AccessLogJob]:
         return AccessLogCollectFlow(self.input_path).collect(output_root)

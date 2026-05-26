@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 
@@ -94,21 +95,29 @@ class AccessLogCollectFlow:
                 with log_path.open("rb") as src, target_txt.open("wb") as dst:
                     for chunk in iter(lambda: src.read(1024 * 1024), b""):
                         dst.write(chunk)
-                        if not had_decode_warning:
-                            try:
-                                chunk.decode("utf-8", errors="strict")
-                            except UnicodeDecodeError:
-                                had_decode_warning = True
-                                warnings.append(
-                                    "WARNING: Non-UTF-8 byte sequences detected; "
-                                    "pipeline decode falls back to latin-1 for "
-                                    "downstream safety (raw .txt stays byte-exact)."
-                                )
+
+                # Re-read by physical line to avoid chunk-boundary false negatives.
+                with log_path.open("rb") as src_verify:
+                    for raw_line in src_verify:
+                        try:
+                            raw_line.decode("utf-8", errors="strict")
+                        except UnicodeDecodeError:
+                            had_decode_warning = True
+                            break
+                if had_decode_warning:
+                    warnings.append(
+                        "WARNING: Non-UTF-8 byte sequences detected; "
+                        "pipeline decode falls back to latin-1 for "
+                        "downstream safety (raw .txt stays byte-exact)."
+                    )
             except OSError as exc:
                 warnings.append(f"ERROR: Failed to read/write file: {exc!r}")
 
             if warnings:
-                warning_file.write_text("\n".join(warnings) + "\n", encoding="utf-8")
+                timestamp = datetime.now(timezone.utc).isoformat()
+                with warning_file.open("a", encoding="utf-8") as wf:
+                    for warning in warnings:
+                        wf.write(f"[{timestamp}] {warning}\n")
 
             jobs.append(
                 AccessLogJob(
