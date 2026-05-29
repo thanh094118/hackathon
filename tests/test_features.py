@@ -64,7 +64,6 @@ def test_feature_extractor_detects_keywords_and_counts():
 
     features = extractor.extract(record)
 
-    assert features["request_length"] > 0
     assert features["param_count"] == 1
     assert features["has_sql_keyword"] == 1
     assert features["has_sqli_evasion_pattern"] == 1
@@ -105,10 +104,6 @@ def test_feature_extractor_counts_are_split_by_uri_query_and_user_agent():
     assert features["ua_slash_count"] == 2
     assert features["ua_dot_count"] == 2
 
-    # Backward-compatible aggregate still exists.
-    assert features["slash_count"] >= features["uri_slash_count"]
-
-
 def test_feature_extractor_entropy_is_available_per_field():
     """
     Test:
@@ -134,7 +129,6 @@ def test_feature_extractor_entropy_is_available_per_field():
     assert features["query_entropy"] > 0
     assert features["uri_entropy"] > 0
     assert features["ua_entropy"] > 0
-    assert features["entropy"] > 0
 
 
 def test_feature_extractor_uses_preprocessor_decode_metadata():
@@ -193,10 +187,8 @@ def test_feature_extractor_uses_normalizer_quality_flags():
 
     features = extractor.extract(record)
 
-    assert features["status_code"] == 0
     assert features["status_code_invalid"] == 1
     assert features["status_code_missing"] == 0
-    assert features["response_size"] == 0
     assert features["response_size_missing"] == 1
     assert features["response_size_invalid"] == 0
 
@@ -306,7 +298,6 @@ def test_feature_extractor_fallback_builds_request_when_missing():
 
     features = extractor.extract(record)
 
-    assert features["request_length"] > 0
     assert features["uri_length"] == len("/home")
     assert features["user_agent_length"] == 2
 
@@ -326,4 +317,3 @@ def test_feature_extractor_parse_query_fallback_handles_malformed_query():
     features = extractor.extract(record)
 
     assert features["param_count"] == 3
-    assert features["param_name_count"] == 3

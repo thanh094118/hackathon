@@ -152,12 +152,62 @@ def _iter_input_items(path: Path) -> Iterator[Any]:
     raise ValueError(f"Unsupported input extension: {suffix}")
 
 
-def _iter_text_entries(path: Path) -> Iterator[str]:
+def _iter_text_entries(path: Path) -> Iterator[Any]:
+    lines: List[str] = []
     with path.open("rb") as handle:
         for raw_line in handle:
-            line = raw_line.decode("utf-8", errors="ignore").rstrip("\r\n")
-            if line.strip():
-                yield line
+            lines.append(raw_line.decode("utf-8", errors="ignore").rstrip("\r\n"))
+
+    pending_request_line: Optional[str] = None
+    pending_headers: Dict[str, str] = {}
+
+    def flush_pending() -> Optional[Dict[str, Any]]:
+        nonlocal pending_request_line, pending_headers
+        if not pending_request_line:
+            return None
+        parsed = _parse_request_line(pending_request_line)
+        payload = {
+            "method": parsed.get("method", "GET"),
+            "raw_uri": parsed.get("target", "/"),
+            "http_version": parsed.get("version") or "HTTP/1.1",
+            "user_agent": pending_headers.get("user-agent", "-"),
+            "referrer": pending_headers.get("referer") or pending_headers.get("referrer") or "-",
+        }
+        pending_request_line = None
+        pending_headers = {}
+        return payload
+
+    for raw in lines:
+        stripped = raw.strip()
+        if not stripped:
+            payload = flush_pending()
+            if payload:
+                yield payload
+            continue
+
+        request = _parse_request_line(stripped)
+        if request:
+            payload = flush_pending()
+            if payload:
+                yield payload
+            pending_request_line = stripped
+            continue
+
+        if pending_request_line and ":" in stripped:
+            key, value = stripped.split(":", 1)
+            header_key = key.strip().lower()
+            if header_key:
+                pending_headers[header_key] = value.strip()
+            continue
+
+        payload = flush_pending()
+        if payload:
+            yield payload
+        yield stripped
+
+    payload = flush_pending()
+    if payload:
+        yield payload
 
 
 def _iter_csv_rows(path: Path) -> Iterator[Dict[str, Any]]:
@@ -193,7 +243,7 @@ def _to_raw_log_lines(item: Any) -> List[str]:
 
 def _from_mapping_item(item: Mapping[str, Any]) -> str:
     normalized = _normalize_keys(item)
-    uri = _pick_text(normalized, *_URI_KEYS) or "/"
+    uri = _pick_text(normalized, "raw_uri", *_URI_KEYS) or "/"
     method = _pick_text(normalized, *_METHOD_KEYS) or "GET"
     return _build_access_log_line({
         "source_ip": _pick_text(normalized, *_SOURCE_IP_KEYS) or "0.0.0.0",
@@ -277,3 +327,14 @@ def _to_int(value: Any, *, default: int = 0) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _parse_request_line(line: str) -> Optional[Dict[str, str]]:
+    match = _REQUEST_LINE_PATTERN.match(line.strip())
+    if not match:
+        return None
+    return {
+        "method": (match.group("method") or "GET").strip().upper(),
+        "target": (match.group("target") or "/").strip(),
+        "version": (match.group("version") or "").strip(),
+    }

@@ -9,7 +9,9 @@ def test_risk_engine_elevates_score_from_features():
         "feature_has_xss_keyword": 0,
         "feature_has_path_traversal": 1,
         "feature_is_scanner_user_agent": 1,
-        "feature_special_char_count": 30,
+        "feature_uri_special_char_count": 10,
+        "feature_query_special_char_count": 12,
+        "feature_ua_special_char_count": 8,
         "feature_param_count": 12,
         "status_code": 200,
     }

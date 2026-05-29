@@ -27,11 +27,11 @@ cd data
 
 echo ""
 echo "Downloading dataset from Google Drive..."
-echo "File: outputs.zip"
+echo "File: input.zip"
 echo ""
 
-FILE_ID="1uya_Y9SfPZ0DNsrp0qcWB8KZGZx42xDn"
-OUTPUT_FILE="outputs.zip"
+FILE_ID="1QeCCZT1QBgnCjt1x-l7q-kCO5zysJ4fd"
+OUTPUT_FILE="input.zip"
 
 download_with_gdown() {
     if ! command -v gdown &> /dev/null; then

@@ -27,7 +27,12 @@ class RiskEngine:
         if self._to_int(record.get("feature_is_scanner_user_agent")):
             bonus += 6
 
-        if self._to_int(record.get("feature_special_char_count")) >= 20:
+        special_char_total = (
+            self._to_int(record.get("feature_uri_special_char_count"))
+            + self._to_int(record.get("feature_query_special_char_count"))
+            + self._to_int(record.get("feature_ua_special_char_count"))
+        )
+        if special_char_total >= 20:
             bonus += 4
         if self._to_int(record.get("feature_param_count")) >= 10:
             bonus += 3

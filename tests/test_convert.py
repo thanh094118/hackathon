@@ -58,3 +58,24 @@ def test_convert_split_large_output(tmp_path: Path, monkeypatch):
     assert isinstance(outputs, list)
     assert len(outputs) > 1
     assert all(Path(p).exists() for p in outputs)
+
+
+def test_convert_http_request_block_to_single_access_line(tmp_path: Path):
+    input_path = tmp_path / "request_block.log"
+    input_path.write_text(
+        "GET http://localhost:8080/tienda1/publico/anadir.jsp?id=2 HTTP/1.1\n"
+        "User-Agent: Mozilla/5.0 (compatible; Konqueror/3.5; Linux)\n"
+        "Referer: http://localhost:8080/tienda1/publico/\n"
+        "Host: localhost:8080\n"
+        "Connection: close\n",
+        encoding="utf-8",
+    )
+
+    summary = convert_file(input_path=input_path, output_root=tmp_path / "data/raw", server_type="apache")
+    outputs = summary["converted"][0]["output"]
+    out_path = Path(outputs if isinstance(outputs, str) else outputs[0])
+    lines = _read_lines(out_path)
+
+    assert len(lines) == 1
+    assert '"GET http://localhost:8080/tienda1/publico/anadir.jsp?id=2 HTTP/1.1"' in lines[0]
+    assert '"Mozilla/5.0 (compatible; Konqueror/3.5; Linux)"' in lines[0]

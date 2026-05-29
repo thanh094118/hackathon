@@ -115,6 +115,7 @@ class LogPipeline:
         self.jsonl_exporter = JSONLExporter()
         self.csv_exporter = CSVExporter(preferred_fieldnames=RECORD_PREFERRED_COLUMNS)
         self.alert_csv_exporter = CSVExporter(preferred_fieldnames=ALERT_PREFERRED_COLUMNS)
+        self.feature_csv_exporter = CSVExporter()
         self.markdown_exporter = MarkdownExporter()
 
         self.mongo_exporter = None
@@ -243,7 +244,7 @@ class LogPipeline:
 
         # 6. Final exports
         if self.stage in ("all", "extract"):
-            self.csv_exporter.export(feature_rows, stage_file("extract", "features.csv"))
+            self.feature_csv_exporter.export(feature_rows, stage_file("extract", "features.csv"))
         if self.stage in ("all", "detect"):
             self.jsonl_exporter.export(alerts, stage_file("detect", "alerts.jsonl"))
             self.alert_csv_exporter.export(alerts, stage_file("detect", "alerts.csv"))
@@ -328,22 +329,14 @@ class LogPipeline:
         return records
 
     def _build_feature_row(self, record: Dict) -> Dict:
-        row = {
-            "line_number": record.get("line_number"),
-            "event_id": record.get("event_id"),
-            "parse_status": record.get("parse_status"),
-            "parse_error": record.get("parse_error"),
-            "error_message": record.get("error_message"),
-            "source_ip": record.get("source_ip"),
-            "http_method": record.get("http_method"),
-            "original_url": record.get("original_url"),
-            "uri": record.get("uri"),
-            "query_string": record.get("query_string"),
-            "normalized_request": record.get("normalized_request"),
-            "server_type": record.get("server_type"),
+        excluded_feature_columns = {
+            "feature_status_code",
+            "feature_response_size",
+            "feature_feature_schema_version",
         }
+        row = {}
         for key, value in record.items():
-            if key.startswith("feature_"):
+            if key.startswith("feature_") and key not in excluded_feature_columns:
                 row[key] = value
         return row
 

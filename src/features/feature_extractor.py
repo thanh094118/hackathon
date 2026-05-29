@@ -53,28 +53,12 @@ class FeatureExtractor:
         # Length features
         "uri_length",
         "query_length",
-        "request_length",
         "user_agent_length",
 
         # Query structure
         "param_count",
-        "param_name_count",
         "avg_param_name_length",
         "avg_param_value_length",
-
-        # Aggregate request counts kept for backward compatibility
-        "special_char_count",
-        "digit_count",
-        "alpha_count",
-        "space_count",
-        "slash_count",
-        "dot_count",
-        "quote_count",
-        "angle_bracket_count",
-        "percent_count",
-        "equals_count",
-        "hyphen_count",
-        "entropy",
 
         # URI-specific counts
         "uri_special_char_count",
@@ -118,10 +102,8 @@ class FeatureExtractor:
         "ua_entropy",
 
         # Response / normalized metadata
-        "status_code",
         "status_code_missing",
         "status_code_invalid",
-        "response_size",
         "response_size_missing",
         "response_size_invalid",
 
@@ -144,8 +126,6 @@ class FeatureExtractor:
         "has_path_traversal",
         "is_scanner_user_agent",
 
-        # Version marker as numeric for sklearn compatibility
-        "feature_schema_version",
     ]
 
     def extract(self, record: Mapping[str, Any]) -> Dict[str, int | float]:
@@ -170,28 +150,12 @@ class FeatureExtractor:
             # Lengths
             "uri_length": len(uri),
             "query_length": len(query),
-            "request_length": len(request),
             "user_agent_length": len(user_agent),
 
             # Query structure
             "param_count": len(query_params),
-            "param_name_count": len({name for name, _value in query_params}),
             "avg_param_name_length": self._avg_len([name for name, _value in query_params]),
             "avg_param_value_length": self._avg_len([value for _name, value in query_params]),
-
-            # Backward-compatible aggregate counts
-            "special_char_count": self._count_special_chars(request),
-            "digit_count": self._count_digits(request),
-            "alpha_count": self._count_alpha(request),
-            "space_count": self._count_space(request),
-            "slash_count": request.count("/"),
-            "dot_count": request.count("."),
-            "quote_count": self._count_quotes(request),
-            "angle_bracket_count": self._count_angle_brackets(request),
-            "percent_count": request.count("%"),
-            "equals_count": request.count("="),
-            "hyphen_count": request.count("-"),
-            "entropy": self._round_entropy(request),
 
             # URI-specific
             **self._field_count_features("uri", uri, include_ampersand=False),
@@ -203,10 +167,8 @@ class FeatureExtractor:
             **self._field_count_features("ua", user_agent, include_ampersand=False, include_backslash=False),
 
             # Response / data quality metadata
-            "status_code": self._to_int(record.get("status_code")),
             "status_code_missing": int(self._to_bool(record.get("status_code_missing"))),
             "status_code_invalid": int(self._to_bool(record.get("status_code_invalid"))),
-            "response_size": self._to_int(record.get("response_size")),
             "response_size_missing": int(self._to_bool(record.get("response_size_missing"))),
             "response_size_invalid": int(self._to_bool(record.get("response_size_invalid"))),
 
@@ -229,8 +191,6 @@ class FeatureExtractor:
             "has_path_traversal": int(self._contains_any(request, self.TRAVERSAL_KEYWORDS)),
             "is_scanner_user_agent": int(self._is_scanner_user_agent(user_agent)),
 
-            # Numeric schema version marker
-            "feature_schema_version": 2,
         }
 
         # Enforce fixed schema and numeric-only vector.
