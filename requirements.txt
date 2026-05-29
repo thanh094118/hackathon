@@ -1,3 +1,7 @@
 pyyaml
 python-dateutil
 pytest
+pymongo
+dnspython
+python-dotenv
+numpy

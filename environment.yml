@@ -8,3 +8,7 @@ dependencies:
   - python-dateutil
   - pytest
   - pip
+  - pip:
+      - pymongo
+      - dnspython
+      - python-dotenv
