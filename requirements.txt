@@ -1,7 +1,18 @@
+# Core pipeline
 pyyaml
 python-dateutil
+gdown
+
+# Test runner
 pytest
+
+# Persistence
 pymongo
 dnspython
 python-dotenv
+
+# AI / Features
 numpy
+pandas
+joblib
+scikit-learn

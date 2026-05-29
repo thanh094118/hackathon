@@ -1,6 +1,7 @@
-import hashlib
+from __future__ import annotations
+
 import shlex
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, Iterator, List, Optional
 
 from src.parser.base_parser import BaseParser
 
@@ -9,15 +10,19 @@ class IISParser(BaseParser):
     """
     Parser for IIS W3C Extended Log Format.
 
-    IIS logs often contain a #Fields line that defines column order.
-    Example:
-    #Fields: date time c-ip cs-method cs-uri-stem cs-uri-query sc-status sc-bytes cs(User-Agent) cs(Referer)
+    IIS logs use a #Fields line to define the column order. This parser keeps
+    field state per parse_lines() call and resets it before every new stream,
+    so the same parser instance can be reused safely for multiple files.
     """
 
     server_type = "iis"
 
-    def __init__(self):
+    def __init__(self) -> None:
+        super().__init__()
         self.fields: List[str] = []
+
+    def reset(self) -> None:
+        self.fields = []
 
     def parse_line(self, line: str) -> Optional[Dict]:
         stripped = line.strip()
@@ -26,47 +31,30 @@ class IISParser(BaseParser):
             return None
 
         if stripped.startswith("#Fields:"):
-            self.fields = stripped.replace("#Fields:", "").strip().split()
+            self.fields = stripped.replace("#Fields:", "", 1).strip().split()
             return None
 
         if stripped.startswith("#"):
             return None
 
         if not self.fields:
-            return {
-                "parse_error": True,
-                "error_message": "Missing #Fields header before IIS data line",
-                "timestamp": None,
-                "source_ip": None,
-                "http_method": None,
-                "raw_uri": None,
-                "http_version": None,
-                "status_code": 0,
-                "response_size": 0,
-                "referrer": None,
-                "user_agent": None,
-                "raw_log": line,
-                "server_type": self.server_type,
-            }
+            return self._error_record(
+                line=line,
+                message="Missing #Fields header before IIS data line",
+            )
 
-        parts = self._split_fields(stripped)
+        parts, split_error = self._split_fields(stripped)
+        if split_error:
+            return self._error_record(
+                line=line,
+                message=split_error,
+            )
 
         if len(parts) != len(self.fields):
-            return {
-                "parse_error": True,
-                "error_message": f"IIS field count mismatch: expected {len(self.fields)}, got {len(parts)}",
-                "timestamp": None,
-                "source_ip": None,
-                "http_method": None,
-                "raw_uri": None,
-                "http_version": None,
-                "status_code": 0,
-                "response_size": 0,
-                "referrer": None,
-                "user_agent": None,
-                "raw_log": line,
-                "server_type": self.server_type,
-            }
+            return self._error_record(
+                line=line,
+                message=f"IIS field count mismatch: expected {len(self.fields)}, got {len(parts)}",
+            )
 
         row = dict(zip(self.fields, parts))
 
@@ -74,66 +62,66 @@ class IISParser(BaseParser):
         time = row.get("time")
         timestamp = f"{date} {time}" if date and time else None
 
-        raw_uri = row.get("cs-uri-stem", "")
-        query = row.get("cs-uri-query", "-")
-        if query and query != "-":
+        raw_uri = row.get("cs-uri-stem")
+        query = row.get("cs-uri-query")
+        if raw_uri and query and query != "-":
             raw_uri = f"{raw_uri}?{query}"
 
-        status = row.get("sc-status", "0")
-        response_size = row.get("sc-bytes", "0")
+        source_ip, ip_error = self._validate_source_ip(row.get("c-ip"))
+        if ip_error:
+            return self._error_record(line=line, message=ip_error)
+
+        method = row.get("cs-method")
+        if method is None or method.upper() not in self.VALID_HTTP_METHODS:
+            return self._error_record(line=line, message="Invalid http_method in request field")
+
+        status_code, status_error = self._parse_status_code(row.get("sc-status"))
+        if status_error:
+            return self._error_record(line=line, message=status_error)
+
+        response_size, size_error = self._parse_response_size(row.get("sc-bytes", "0"))
+        if size_error:
+            return self._error_record(line=line, message=size_error)
 
         return {
             "timestamp": timestamp,
-            "source_ip": row.get("c-ip"),
-            "http_method": row.get("cs-method"),
+            "source_ip": source_ip,
+            "request": None,
+            "http_method": method.upper(),
             "raw_uri": raw_uri,
             "original_url": raw_uri,
             "http_version": None,
-            "status_code": self._to_int(status),
-            "response_size": self._to_int(response_size),
+            "status_code": status_code,
+            "response_size": response_size,
             "referrer": row.get("cs(Referer)", "-"),
             "user_agent": row.get("cs(User-Agent)", "-"),
+            "format_profile": "w3c",
+            "extra_tail": None,
             "parse_error": False,
+            "error_message": None,
         }
 
-    def parse_lines(self, lines: Iterable[str]) -> List[Dict]:
-        records = []
+    def parse_lines(self, lines: Iterable[str]) -> Iterator[Dict]:
+        """
+        Stream IIS records and add data_line_number.
+
+        This method still delegates the shared parse flow to BaseParser via
+        super().parse_lines(...), avoiding duplicated event_id/schema logic.
+        """
+        self.reset()
         data_line_number = 0
 
-        for physical_line_number, line in enumerate(lines, start=1):
-            parsed = self.parse_line(line)
-
-            if parsed is None:
-                continue
-
-            data_line_number += 1
-            parsed.setdefault("parse_error", False)
-            parsed.setdefault("error_message", None)
-            parsed["parse_status"] = "error" if parsed.get("parse_error") else "success"
-            parsed["line_number"] = physical_line_number
-            parsed["data_line_number"] = data_line_number
-            parsed["server_type"] = self.server_type
-            parsed.setdefault("raw_log", line)
-            if "event_id" not in parsed:
-                digest = hashlib.sha1(str(parsed.get("raw_log", "")).encode("utf-8", errors="ignore")).hexdigest()[:12]
-                parsed["event_id"] = f"{self.server_type}:{physical_line_number}:{digest}"
-            if parsed.get("raw_uri") is not None:
-                parsed.setdefault("original_url", parsed.get("raw_uri"))
-            records.append(parsed)
-
-        return records
+        for parsed in super().parse_lines(lines):
+            if parsed.get("parse_status") == "success":
+                data_line_number += 1
+                parsed["data_line_number"] = data_line_number
+            else:
+                parsed["data_line_number"] = None
+            yield parsed
 
     @staticmethod
-    def _to_int(value: str) -> int:
+    def _split_fields(line: str) -> tuple[Optional[List[str]], Optional[str]]:
         try:
-            return int(value)
-        except (TypeError, ValueError):
-            return 0
-
-    @staticmethod
-    def _split_fields(line: str) -> List[str]:
-        try:
-            # Handles quoted user-agent/referer containing spaces.
-            return shlex.split(line)
-        except ValueError:
-            return line.split()
+            return shlex.split(line), None
+        except ValueError as exc:
+            return None, f"Malformed quoted IIS fields: {exc}"

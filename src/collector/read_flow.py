@@ -8,7 +8,7 @@ class AccessLogReadFlow:
     - Read one access log in binary mode
     - Strip UTF-8 BOM at first line
     - Normalize line endings
-    - Merge suspicious continuation lines (possible newline injection)
+    - Merge indented continuation lines only (possible newline injection)
     """
 
     def __init__(self, input_path: str | Path):

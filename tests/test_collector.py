@@ -1,95 +1,380 @@
 from pathlib import Path
+import pytest
 
 from src.collector.file_collector import FileCollector
+from src.collector.read_flow import AccessLogReadFlow
 
 
-def test_read_flow_handles_bom_and_continuation_lines(tmp_path: Path):
-    log_path = tmp_path / "access1.log"
+# ============================================================
+# READ FLOW TESTS
+# Mục tiêu:
+# - Kiểm tra đọc file ở chế độ binary.
+# - Decode UTF-8 trước, fallback latin-1 nếu lỗi.
+# - Strip UTF-8 BOM ở dòng đầu tiên.
+# - Chuẩn hóa line ending.
+# - Bỏ dòng rỗng.
+# - Chỉ merge continuation line nếu bắt đầu bằng space/tab.
+# - Ghi metadata cho từng logical record.
+# ============================================================
+
+
+def test_read_flow_handles_utf8_bom_only_on_first_line(tmp_path: Path):
+    """
+    Test:
+    - Nếu file có UTF-8 BOM ở dòng đầu tiên thì Collector phải bỏ BOM.
+    - Nếu BOM xuất hiện ở dòng sau thì không được strip vì đó không còn là BOM đầu file.
+    """
+    log_path = tmp_path / "access.log"
     log_path.write_bytes(
         b"\xef\xbb\xbf127.0.0.1 - - [10/Oct/2000:13:55:36 +0000] "
-        b"\"GET /index HTTP/1.1\" 200 10 \"-\" \"ua\"\n"
-        b"  <broken continuation>\n"
-        b"10.0.0.2 - - [10/Oct/2000:13:55:37 +0000] "
-        b"\"GET /ok HTTP/1.1\" 200 20 \"-\" \"ua2\"\n"
-    )
-
-    lines = FileCollector(str(log_path)).read_all()
-    assert len(lines) == 2
-    assert "\\n  <broken continuation>" in lines[0]
-    assert lines[0].startswith("127.0.0.1")
-
-
-def test_read_flow_does_not_merge_non_indented_lines(tmp_path: Path):
-    log_path = tmp_path / "access2.log"
-    log_path.write_bytes(
-        b"127.0.0.1 - - [10/Oct/2000:13:55:36 +0000] "
         b"\"GET /a HTTP/1.1\" 200 10 \"-\" \"ua\"\n"
-        b"Injected-Header: abc\n"
-        b"example-host - - [10/Oct/2000:13:55:37 +0000] "
+        b"\xef\xbb\xbf10.0.0.2 - - [10/Oct/2000:13:55:37 +0000] "
         b"\"GET /b HTTP/1.1\" 200 20 \"-\" \"ua2\"\n"
-        b"::ffff:1.2.3.4 - - [10/Oct/2000:13:55:38 +0000] "
-        b"\"GET /c HTTP/1.1\" 200 30 \"-\" \"ua3\"\n"
-        b"- - - [10/Oct/2000:13:55:39 +0000] "
-        b"\"GET /d HTTP/1.1\" 200 40 \"-\" \"ua4\"\n"
+    )
+
+    records = FileCollector(str(log_path)).read_records()
+
+    assert len(records) == 2
+    assert records[0]["line"].startswith("127.0.0.1")
+    assert records[0]["had_bom"] is True
+
+    # BOM ở dòng 2 không bị strip vì không phải BOM đầu file.
+    assert records[1]["line"].startswith("\ufeff10.0.0.2")
+    assert records[1]["had_bom"] is False
+
+
+def test_read_flow_normalizes_lf_crlf_and_cr_line_endings(tmp_path: Path):
+    """
+    Test:
+    - File có nhiều kiểu xuống dòng: LF, CRLF, CR.
+    - Output logical line không được còn ký tự \n hoặc \r ở cuối.
+    """
+    log_path = tmp_path / "access.log"
+    log_path.write_bytes(
+        b"127.0.0.1 - - [date] \"GET /lf HTTP/1.1\" 200 1 \"-\" \"ua\"\n"
+        b"127.0.0.2 - - [date] \"GET /crlf HTTP/1.1\" 200 2 \"-\" \"ua\"\r\n"
+        b"127.0.0.3 - - [date] \"GET /cr HTTP/1.1\" 200 3 \"-\" \"ua\"\r"
     )
 
     lines = FileCollector(str(log_path)).read_all()
+
+    assert len(lines) == 3
+    assert all(not line.endswith("\n") for line in lines)
+    assert all(not line.endswith("\r") for line in lines)
+
+
+def test_read_flow_skips_empty_and_whitespace_only_lines(tmp_path: Path):
+    """
+    Test:
+    - Dòng rỗng, dòng chỉ có space, dòng chỉ có tab đều bị bỏ qua.
+    """
+    log_path = tmp_path / "access.log"
+    log_path.write_bytes(
+        b"\n"
+        b"   \n"
+        b"\t\n"
+        b"127.0.0.1 - - [date] \"GET /ok HTTP/1.1\" 200 1 \"-\" \"ua\"\n"
+        b"\r\n"
+    )
+
+    lines = FileCollector(str(log_path)).read_all()
+
+    assert lines == [
+        '127.0.0.1 - - [date] "GET /ok HTTP/1.1" 200 1 "-" "ua"'
+    ]
+
+
+def test_read_flow_merges_space_and_tab_continuation_lines(tmp_path: Path):
+    """
+    Test:
+    - Dòng bắt đầu bằng space được merge vào dòng log trước.
+    - Dòng bắt đầu bằng tab cũng được merge vào dòng log trước.
+    - Metadata phải ghi nhận có merge continuation.
+    """
+    log_path = tmp_path / "access.log"
+    log_path.write_bytes(
+        b"127.0.0.1 - - [date] \"GET /a HTTP/1.1\" 200 1 \"-\" \"ua\"\n"
+        b"  continued payload\n"
+        b"\tcontinued tab payload\n"
+        b"10.0.0.2 - - [date] \"GET /b HTTP/1.1\" 200 2 \"-\" \"ua2\"\n"
+    )
+
+    records = FileCollector(str(log_path)).read_records()
+
+    assert len(records) == 2
+    assert records[0]["line"] == (
+        '127.0.0.1 - - [date] "GET /a HTTP/1.1" 200 1 "-" "ua"'
+        "\\n  continued payload"
+        "\\n\tcontinued tab payload"
+    )
+    assert records[0]["was_continuation_merged"] is True
+    assert records[0]["physical_line_start"] == 1
+    assert records[0]["physical_line_end"] == 3
+
+
+def test_read_flow_does_not_merge_non_indented_injection_like_lines(tmp_path: Path):
+    """
+    Test:
+    - Các dòng giống payload/injection nhưng không có indent thì không được merge.
+    """
+    log_path = tmp_path / "access.log"
+    log_path.write_bytes(
+        b"127.0.0.1 - - [date] \"GET /a HTTP/1.1\" 200 1 \"-\" \"ua\"\n"
+        b"Injected-Header: abc\n"
+        b"<script>alert(1)</script>\n"
+        b"{json: true}\n"
+        b"10.0.0.2 - - [date] \"GET /b HTTP/1.1\" 200 2 \"-\" \"ua2\"\n"
+    )
+
+    lines = FileCollector(str(log_path)).read_all()
+
     assert len(lines) == 5
     assert lines[1] == "Injected-Header: abc"
+    assert lines[2] == "<script>alert(1)</script>"
+    assert lines[3] == "{json: true}"
+
+
+def test_read_flow_does_not_merge_valid_unusual_log_prefixes(tmp_path: Path):
+    """
+    Test:
+    - Các log hợp lệ nhưng có prefix không phổ biến vẫn không bị merge nhầm.
+    """
+    log_path = tmp_path / "access.log"
+    log_path.write_bytes(
+        b"::ffff:1.2.3.4 - - [date] \"GET /ipv6 HTTP/1.1\" 200 1 \"-\" \"ua\"\n"
+        b"- - - [date] \"GET /dash HTTP/1.1\" 200 2 \"-\" \"ua\"\n"
+        b"example-host - - [date] \"GET /host HTTP/1.1\" 200 3 \"-\" \"ua\"\n"
+        b"[custom-prefix] 127.0.0.1 - - \"GET /bracket HTTP/1.1\" 200\n"
+    )
+
+    lines = FileCollector(str(log_path)).read_all()
+
+    assert len(lines) == 4
+    assert lines[0].startswith("::ffff:1.2.3.4")
+    assert lines[1].startswith("- - -")
     assert lines[2].startswith("example-host")
-    assert lines[3].startswith("::ffff:1.2.3.4")
-    assert lines[4].startswith("- - -")
+    assert lines[3].startswith("[custom-prefix]")
+
+
+def test_read_flow_latin1_fallback_does_not_crash(tmp_path: Path):
+    """
+    Test:
+    - Một dòng có byte không decode được bằng UTF-8.
+    - Collector phải fallback sang latin-1 thay vì crash.
+    """
+    log_path = tmp_path / "access.log"
+    log_path.write_bytes(
+        b"127.0.0.1 - - [date] \"GET /ok HTTP/1.1\" 200 1 \"-\" \"ua\"\n"
+        b"10.0.0.2 - - [date] \"GET /\xff HTTP/1.1\" 200 2 \"-\" \"ua2\"\n"
+    )
+
+    records = FileCollector(str(log_path)).read_records()
+
+    assert len(records) == 2
+    assert records[0]["encoding_used"] == "utf-8"
+    assert records[0]["decode_error"] is False
+    assert records[1]["encoding_used"] == "latin-1"
+    assert records[1]["decode_error"] is True
+    assert "ÿ" in records[1]["line"]
+
+
+def test_read_flow_continuation_can_upgrade_record_encoding_to_latin1(tmp_path: Path):
+    """
+    Test:
+    - Dòng chính decode được UTF-8.
+    - Dòng continuation chứa byte bẩn phải fallback latin-1.
+    """
+    log_path = tmp_path / "access.log"
+    log_path.write_bytes(
+        b"127.0.0.1 - - [date] \"GET /ok HTTP/1.1\" 200 1 \"-\" \"ua\"\n"
+        b"  continuation with bad byte \xff\n"
+    )
+
+    records = FileCollector(str(log_path)).read_records()
+
+    assert len(records) == 1
+    assert records[0]["encoding_used"] == "latin-1"
+    assert records[0]["decode_error"] is True
+    assert records[0]["was_continuation_merged"] is True
+
+
+def test_read_flow_validate_missing_file_raises(tmp_path: Path):
+    missing = tmp_path / "missing.log"
+
+    with pytest.raises(FileNotFoundError):
+        FileCollector(str(missing)).read_all()
+
+
+def test_read_flow_validate_directory_raises(tmp_path: Path):
+    with pytest.raises(ValueError):
+        FileCollector(str(tmp_path)).read_all()
+
+
+# ============================================================
+# COLLECT FLOW TESTS
+# ============================================================
 
 
 def test_collect_flow_copies_file_byte_exactly(tmp_path: Path):
     input_root = tmp_path / "input"
     apache_dir = input_root / "Apache"
-    apache_dir.mkdir(parents=True, exist_ok=True)
+    apache_dir.mkdir(parents=True)
+
     raw_bytes = (
-        b"127.0.0.1 - - [10/Oct/2000:13:55:36 +0000] "
-        b"\"GET /index HTTP/1.1\" 200 10 \"-\" \"ua\"\n"
+        b"\xef\xbb\xbf127.0.0.1 - - [date] "
+        b"\"GET /\xff HTTP/1.1\" 200 10 \"-\" \"ua\"\r\n"
     )
     log_path = apache_dir / "access1.log"
     log_path.write_bytes(raw_bytes)
 
     output_root = tmp_path / "outputs"
     jobs = FileCollector(str(input_root)).collect_jobs(str(output_root))
+
     assert len(jobs) == 1
-
-    copied_path = jobs[0].output_txt_path
-    assert copied_path.exists()
-    assert copied_path.read_bytes() == raw_bytes
+    assert jobs[0].server_type == "Apache"
+    assert jobs[0].output_txt_path.read_bytes() == raw_bytes
 
 
-def test_read_flow_records_include_optional_metadata(tmp_path: Path):
-    log_path = tmp_path / "access3.log"
-    log_path.write_bytes(
-        b"\xef\xbb\xbf127.0.0.1 - - [10/Oct/2000:13:55:36 +0000] "
-        b"\"GET /x HTTP/1.1\" 200 10 \"-\" \"ua\"\n"
-        b"\tcontinuation\n"
-    )
-    records = FileCollector(str(log_path)).read_records()
-    assert len(records) == 1
-    first = records[0]
-    assert first["encoding_used"] in {"utf-8", "latin-1"}
-    assert first["had_bom"] is True
-    assert first["was_continuation_merged"] is True
-    assert first["physical_line_start"] == 1
-    assert first["physical_line_end"] == 2
+def test_collect_flow_discovers_only_access_log_files(tmp_path: Path):
+    input_root = tmp_path / "input"
+    apache_dir = input_root / "Apache"
+    apache_dir.mkdir(parents=True)
+
+    valid_1 = apache_dir / "access.log"
+    valid_2 = apache_dir / "access_error.log"
+    invalid_1 = apache_dir / "error.log"
+    invalid_2 = apache_dir / "access.txt"
+
+    valid_1.write_bytes(b"valid1\n")
+    valid_2.write_bytes(b"valid2\n")
+    invalid_1.write_bytes(b"invalid1\n")
+    invalid_2.write_bytes(b"invalid2\n")
+
+    jobs = FileCollector(str(input_root)).collect_jobs(str(tmp_path / "outputs"))
+
+    copied_names = sorted(job.input_log_path.name for job in jobs)
+    assert copied_names == ["access.log", "access_error.log"]
+
+
+def test_collect_flow_supports_single_file_input(tmp_path: Path):
+    log_path = tmp_path / "access.log"
+    log_path.write_bytes(b"127.0.0.1 - - [date] \"GET / HTTP/1.1\" 200 1\n")
+
+    jobs = FileCollector(str(log_path)).collect_jobs(str(tmp_path / "outputs"))
+
+    assert len(jobs) == 1
+    assert jobs[0].server_type == "unknown"
+    assert jobs[0].output_txt_path.exists()
+
+
+def test_collect_flow_detects_server_type_from_parent_folder_case_insensitive(tmp_path: Path):
+    input_root = tmp_path / "input"
+    for folder_name, expected in [
+        ("Apache", "Apache"),
+        ("Nginx", "Nginx"),
+        ("IIS", "IIS"),
+        ("Other", "unknown"),
+    ]:
+        d = input_root / folder_name
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "access.log").write_bytes(b"x\n")
+
+    jobs = FileCollector(str(input_root)).collect_jobs(str(tmp_path / "outputs"))
+
+    result = {job.input_log_path.parent.name: job.server_type for job in jobs}
+    assert result["Apache"] == "Apache"
+    assert result["Nginx"] == "Nginx"
+    assert result["IIS"] == "IIS"
+    assert result["Other"] == "unknown"
+
+
+def test_collect_flow_sanitizes_access_folder_name(tmp_path: Path):
+    input_root = tmp_path / "input" / "Apache"
+    input_root.mkdir(parents=True)
+
+    log_path = input_root / "access.2026.05.log"
+    log_path.write_bytes(b"x\n")
+
+    jobs = FileCollector(str(tmp_path / "input")).collect_jobs(str(tmp_path / "outputs"))
+
+    assert len(jobs) == 1
+    assert jobs[0].output_dir.name == "access_2026_05"
+    assert jobs[0].output_txt_path.name == "access_2026_05.txt"
+
+
+def test_collect_flow_warning_log_is_created_for_non_utf8(tmp_path: Path):
+    input_root = tmp_path / "input" / "Nginx"
+    input_root.mkdir(parents=True)
+
+    log_path = input_root / "access9.log"
+    log_path.write_bytes(b"127.0.0.1 ok\nbad-byte:\xff\n")
+
+    output_root = tmp_path / "outputs"
+    FileCollector(str(tmp_path / "input")).collect_jobs(str(output_root))
+
+    warning_file = output_root / "Nginx" / "access9" / "log.txt"
+    assert warning_file.exists()
+
+    text = warning_file.read_text(encoding="utf-8")
+    assert "Non-UTF-8 byte sequences detected" in text
+    assert "raw .txt stays byte-exact" in text
 
 
 def test_collect_flow_warning_log_is_appended_not_overwritten(tmp_path: Path):
-    input_root = tmp_path / "input"
-    nginx_dir = input_root / "Nginx"
-    nginx_dir.mkdir(parents=True, exist_ok=True)
-    log_path = nginx_dir / "access9.log"
+    input_root = tmp_path / "input" / "Nginx"
+    input_root.mkdir(parents=True)
+
+    log_path = input_root / "access9.log"
     log_path.write_bytes(b"\xff\xfe\xfd bad bytes\n")
 
     output_root = tmp_path / "outputs"
-    collector = FileCollector(str(input_root))
+    collector = FileCollector(str(tmp_path / "input"))
     collector.collect_jobs(str(output_root))
     collector.collect_jobs(str(output_root))
 
     warning_file = output_root / "Nginx" / "access9" / "log.txt"
     text = warning_file.read_text(encoding="utf-8")
+
     assert text.count("Non-UTF-8 byte sequences detected") >= 2
+
+
+def test_collect_flow_no_warning_log_for_valid_utf8(tmp_path: Path):
+    input_root = tmp_path / "input" / "Apache"
+    input_root.mkdir(parents=True)
+
+    log_path = input_root / "access.log"
+    log_path.write_bytes("127.0.0.1 tiếng_việt_ok\n".encode("utf-8"))
+
+    output_root = tmp_path / "outputs"
+    FileCollector(str(tmp_path / "input")).collect_jobs(str(output_root))
+
+    warning_file = output_root / "Apache" / "access" / "log.txt"
+    assert not warning_file.exists()
+
+
+def test_backward_compatible_collect_access_logs_to_txt_returns_path_pairs(tmp_path: Path):
+    input_root = tmp_path / "input" / "Apache"
+    input_root.mkdir(parents=True)
+
+    log_path = input_root / "access.log"
+    log_path.write_bytes(b"x\n")
+
+    pairs = FileCollector(str(tmp_path / "input")).collect_access_logs_to_txt(
+        str(tmp_path / "outputs")
+    )
+
+    assert len(pairs) == 1
+    input_path, output_path = pairs[0]
+    assert input_path == log_path
+    assert output_path.exists()
+    assert output_path.read_bytes() == b"x\n"
+
+
+def test_access_log_read_flow_internal_continuation_rule_is_indent_only():
+    assert AccessLogReadFlow._is_continuation_line(" continuation") is True
+    assert AccessLogReadFlow._is_continuation_line("\tcontinuation") is True
+
+    assert AccessLogReadFlow._is_continuation_line("Injected-Header: abc") is False
+    assert AccessLogReadFlow._is_continuation_line("<script>") is False
+    assert AccessLogReadFlow._is_continuation_line("::ffff:1.2.3.4 - -") is False
+    assert AccessLogReadFlow._is_continuation_line("- - - [date]") is False

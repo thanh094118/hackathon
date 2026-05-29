@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 from typing import Dict, Optional
 
@@ -6,89 +8,120 @@ from src.parser.base_parser import BaseParser
 
 class ApacheParser(BaseParser):
     """
-    Parser for Apache combined log format.
+    Parser for Apache Common/Combined Log Format.
 
-    Example:
-    192.168.1.10 - - [18/May/2026:10:15:30 +0700]
-    "GET /search.php?q=test HTTP/1.1" 200 5321 "-" "Mozilla/5.0"
+    Supports:
+    - common
+    - common_with_tail
+    - combined
+    - combined_with_tail
+
+    The parser keeps raw request-target payloads intact but rejects control
+    markers that can indicate log injection or bad continuation-line handling.
     """
 
     server_type = "apache"
 
-    COMBINED_LOG_PATTERN = re.compile(
-        r'(?P<source_ip>\S+)\s+'
-        r'\S+\s+\S+\s+'
-        r'\[(?P<timestamp>[^\]]+)\]\s+'
-        r'"(?P<request>[^"]*)"\s+'
-        r'(?P<status_code>\d{3})\s+'
-        r'(?P<response_size>\S+)\s+'
-        r'"(?P<referrer>[^"]*)"\s+'
-        r'"(?P<user_agent>[^"]*)"'
-    )
-    COMMON_LOG_PATTERN = re.compile(
-        r'(?P<source_ip>\S+)\s+'
-        r'\S+\s+\S+\s+'
-        r'\[(?P<timestamp>[^\]]+)\]\s+'
-        r'"(?P<request>[^"]*)"\s+'
-        r'(?P<status_code>\d{3})\s+'
-        r'(?P<response_size>\S+)'
+    _BASE_PREFIX = (
+        r"(?P<source_ip>\S+)\s+"
+        r"\S+\s+\S+\s+"
+        r"\[(?P<timestamp>[^\]]+)\]\s+"
     )
 
-    REQUEST_PATTERN = re.compile(
-        r'(?P<http_method>[A-Z]+)\s+(?P<raw_uri>\S+)\s+(?P<http_version>HTTP/\d(?:\.\d)?)'
+    _COMBINED_STRICT_PATTERN = (
+        _BASE_PREFIX
+        + r'"(?P<request>[^"]*)"\s+'
+        + r"(?P<status_code>\S+)\s+"
+        + r"(?P<response_size>\S+)\s+"
+        + r'"(?P<referrer>[^"]*)"\s+'
+        + r'"(?P<user_agent>[^"]*)"'
+    )
+    _COMMON_STRICT_PATTERN = (
+        _BASE_PREFIX
+        + r'"(?P<request>[^"]*)"\s+'
+        + r"(?P<status_code>\S+)\s+"
+        + r"(?P<response_size>\S+)"
+    )
+
+    # Greedy request parsing is used only after strict patterns so embedded
+    # quotes in attack payloads can still be preserved when real logs contain
+    # them.
+    _COMBINED_PERMISSIVE_PATTERN = (
+        _BASE_PREFIX
+        + r'"(?P<request>.*)"\s+'
+        + r"(?P<status_code>\S+)\s+"
+        + r"(?P<response_size>\S+)\s+"
+        + r'"(?P<referrer>[^"]*)"\s+'
+        + r'"(?P<user_agent>[^"]*)"'
+        + r"(?:\s+(?P<extra_tail>.+))?"
+    )
+    _COMMON_PERMISSIVE_PATTERN = (
+        _BASE_PREFIX
+        + r'"(?P<request>.*)"\s+'
+        + r"(?P<status_code>\S+)\s+"
+        + r"(?P<response_size>\S+)"
+        + r"(?:\s+(?P<extra_tail>.+))?"
+    )
+
+    PROFILE_PATTERNS = (
+        ("combined", re.compile(_COMBINED_STRICT_PATTERN)),
+        ("combined_with_tail", re.compile(_COMBINED_STRICT_PATTERN + r"\s+(?P<extra_tail>.+)")),
+        ("common", re.compile(_COMMON_STRICT_PATTERN)),
+        ("common_with_tail", re.compile(_COMMON_STRICT_PATTERN + r"\s+(?P<extra_tail>.+)")),
+        ("combined", re.compile(_COMBINED_PERMISSIVE_PATTERN)),
+        ("common", re.compile(_COMMON_PERMISSIVE_PATTERN)),
     )
 
     def parse_line(self, line: str) -> Optional[Dict]:
         clean_line = line.strip()
-        match = self.COMBINED_LOG_PATTERN.fullmatch(clean_line)
-        if not match:
-            match = self.COMMON_LOG_PATTERN.fullmatch(clean_line)
-        if not match:
-            return {
-                "parse_error": True,
-                "error_message": "Line does not match Apache combined log format",
-                "request": None,
-                "raw_uri": None,
-                "http_method": None,
-                "http_version": None,
-                "status_code": 0,
-                "response_size": 0,
-                "referrer": None,
-                "user_agent": None,
-                "raw_log": line,
-                "server_type": self.server_type,
-            }
 
-        data = match.groupdict()
-        data.setdefault("referrer", "-")
-        data.setdefault("user_agent", "-")
+        for profile, pattern in self.PROFILE_PATTERNS:
+            match = pattern.fullmatch(clean_line)
+            if not match:
+                continue
 
-        request = data.get("request", "")
-        request_match = self.REQUEST_PATTERN.fullmatch(request)
+            data = match.groupdict()
+            data.setdefault("referrer", "-")
+            data.setdefault("user_agent", "-")
+            data["format_profile"] = profile
 
-        if request_match:
-            data.update(request_match.groupdict())
-        else:
-            data.update({
-                "http_method": None,
-                "raw_uri": None,
-                "http_version": None,
-                "parse_error": True,
-                "error_message": "Request field does not match expected format",
-            })
+            extra_tail = data.get("extra_tail")
+            if extra_tail is not None:
+                data["extra_tail"] = extra_tail
 
-        data["status_code"] = int(data["status_code"])
-        data["response_size"] = self._parse_response_size(data["response_size"])
-        data["original_url"] = data.get("raw_uri")
-        data.setdefault("parse_error", False)
+            request = data.get("request", "")
+            request_parts, request_error = self._parse_request_field(request)
+            if request_error:
+                return self._error_record(line=line, message=request_error)
 
-        return data
+            source_ip, ip_error = self._validate_source_ip(data.get("source_ip"))
+            if ip_error:
+                return self._error_record(line=line, message=ip_error)
 
-    @staticmethod
-    def _parse_response_size(value: str) -> int:
-        if value == "-":
-            return 0
-        try:
-            return int(value)
-        except ValueError:
-            return 0
+            status_code_raw = data.get("status_code")
+            status_code, status_error = self._parse_status_code(status_code_raw)
+            if status_error:
+                return self._error_record(line=line, message=status_error)
+
+            response_size_raw = data.get("response_size")
+            response_size, size_error = self._parse_response_size(response_size_raw)
+            if size_error:
+                return self._error_record(line=line, message=size_error)
+
+            data.update(request_parts or {})
+            data["source_ip"] = source_ip
+            data["status_code"] = status_code
+            data["response_size"] = response_size
+            data["parse_error"] = False
+            data.setdefault("error_message", None)
+            data["server_type"] = self.server_type
+
+            return data
+
+        return self._error_record(
+            line=line,
+            message=(
+                "No Apache log pattern matched: supported profiles are "
+                "combined/common with optional trailing custom fields"
+            ),
+        )

@@ -26,6 +26,7 @@ Hệ thống phân tích log máy chủ web và phát hiện tấn công dựa t
     *   `python-dateutil`: Xử lý linh hoạt các định dạng thời gian khác nhau từ log máy chủ.
     *   `chardet` (sử dụng trong Collector): Tự động phát hiện bảng mã (encoding) của file log.
     *   `pytest`: Hệ thống kiểm thử đơn vị và kiểm thử tích hợp.
+    *   `pymongo`: Hỗ trợ lưu trữ kết quả phân tích vào MongoDB.
 
 ---
 
@@ -45,7 +46,7 @@ graph TD
     F --> G[Feature Extractor]
     G --> H[Risk Scoring Engine]
     H --> I[Post-Processor]
-    I --> J[Exporters: CSV, JSONL, MD]
+    I --> J[Exporters: CSV, JSONL, MD, MongoDB]
 ```
 
 1.  **Collector**: Đọc file, xử lý lỗi encoding, gộp các dòng log bị ngắt quãng.
@@ -54,7 +55,7 @@ graph TD
 4.  **Preprocessor**: Giải mã URL (URL Decoding), chuẩn hóa chuỗi yêu cầu để tránh các kỹ thuật lẩn tránh (obfuscation).
 5.  **Detection & Features**: 
     *   `Detection`: Đối khớp dữ liệu với các luật trong `attack_patterns.yaml`.
-    *   `Features`: Trích xuất các thuộc tính thống kê (độ hỗn loạn entropy, độ dài, từ khóa nguy hiểm).
+    *   `Features`: Trích xuất các thuộc tính thống kê (độ hỗn luận entropy, độ dài, từ khóa nguy hiểm).
 6.  **Scoring**: Tính toán điểm rủi ro và phân loại cấp độ cảnh báo (Low, Medium, High, Critical).
 7.  **Reporting**: Tổng hợp dữ liệu và xuất báo cáo dưới dạng Markdown và tệp dữ liệu cấu trúc.
 
@@ -64,7 +65,7 @@ graph TD
 
 ```text
 ├── data/
-│   ├── labels/             # Chứa attack_patterns.yaml (Core Rules)
+│   ├── rules/              # Chứa attack_patterns.yaml (Core Rules)
 │   └── raw/                # Dữ liệu log đầu vào mẫu (Apache, Nginx, IIS)
 ├── src/
 │   ├── collector/          # Logic thu thập và xử lý file thô
@@ -74,7 +75,7 @@ graph TD
 │   ├── detection/          # Engine kiểm tra luật (Rule Matching)
 │   ├── features/           # Trích xuất đặc trưng thống kê
 │   ├── scoring/            # Công cụ tính toán điểm rủi ro (Risk Engine)
-│   ├── exporters/          # Xuất dữ liệu ra CSV, JSONL
+│   ├── exporters/          # Xuất dữ liệu ra CSV, JSONL, MongoDB
 │   ├── reporting/          # Tạo báo cáo tổng hợp & Markdown
 │   └── main.py             # Orchestrator (Điều phối toàn bộ Pipeline)
 ├── tests/                  # Hệ thống kiểm thử cho từng module
@@ -111,13 +112,31 @@ python -m src.main --input data/raw/apache/access.log --server-type apache --out
 *   `--output-dir`: Thư mục chứa kết quả đầu ra.
 *   `--rules`: (Tùy chọn) Đường dẫn tới file luật YAML tùy chỉnh.
 
+### Chuyển đổi định dạng đầu vào (Optional)
+Để chuyển đổi các định dạng `.txt`, `.csv`, `.json` sang JSONL chuẩn cho pipeline:
+```bash
+python convert.py --input <input_file>
+```
+
 ---
 
-## 6. CÁC QUYẾT ĐỊNH THIẾT KẾ ĐẶC BIỆT
+## 6. KIỂM THỬ (TESTS)
+
+Chạy toàn bộ tests:
+```bash
+pytest -q
+```
+
+Chạy test không tạo bytecode:
+```bash
+PYTHONDONTWRITEBYTECODE=1 pytest -q -p no:cacheprovider
+```
+
+---
+
+## 7. CÁC QUYẾT ĐỊNH THIẾT KẾ ĐẶC BIỆT
 
 1.  **Strategy & Factory Pattern**: Được áp dụng trong module `parser`. Hệ thống tự động chọn bộ Parser phù hợp dựa trên tham số `server_type`, cho phép dễ dàng thêm các loại máy chủ mới mà không ảnh hưởng đến luồng chính.
 2.  **Schema Unification**: Tất cả dữ liệu sau khi parse được đưa về một cấu trúc (Normalizer) đồng nhất. Điều này cho phép `Detection Engine` và `Risk Engine` hoạt động độc lập với nguồn log ban đầu.
 3.  **Deterministic Scoring**: Thay vì sử dụng xác suất đen (black-box), điểm rủi ro được tính toán dựa trên trọng số rõ ràng từ các luật vi phạm và các đặc trưng trích xuất được, giúp chuyên gia bảo mật dễ dàng truy vết lý do cảnh báo.
 4.  **Error Resilience**: Module `Collector` có khả năng tự phục hồi khi gặp file log bị hỏng hoặc lỗi encoding, đảm bảo pipeline không bị ngắt quãng giữa chừng.
-
----

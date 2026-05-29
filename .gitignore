@@ -1,1 +1,27 @@
-**pycache**
+test_pipeline/
+outputs/
+conversation_cache/
+data/
+back_up/
+a.md
+AGENTS.md
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.pkl
+*.pickle
+*.taz
+**/.codex
+*.codex
+**/.agents
+*.agents
+# Large/local artifacts
+outputs.zip
+outputs/
+.env
+.env.template
+a.puml
+docs/detailed description.pdf
+output_test/

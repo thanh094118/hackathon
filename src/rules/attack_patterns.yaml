@@ -1,0 +1,121 @@
+# Rule-based web attack patterns.
+# Generated safe YAML.
+
+sqli:
+  - id: sqli_boolean_or
+    description: Boolean-based SQL injection using OR/AND tautology
+    field: query_string
+    type: regex
+    pattern: (?:'|\b)(?:\s|/\*.*?\*/)*(?:or|and)(?:\s|/\*.*?\*/)+\d+\s*=\s*\d+
+    score: 55
+    severity: high
+  - id: sqli_union_select
+    description: UNION SELECT SQL injection pattern
+    field: query_string
+    type: regex
+    pattern: \bunion\s+(?:all\s+)?select\b
+    score: 65
+    severity: high
+  - id: sqli_stacked_query
+    description: Stacked SQL query execution
+    field: query_string
+    type: regex
+    pattern: ;\s*(?:drop|insert|update|delete|select|create|alter)\b
+    score: 70
+    severity: critical
+  - id: sqli_comment_with_context
+    description: SQL comment marker only when SQLi context exists
+    field: query_string
+    type: regex
+    pattern: (?=.*(?:'|\bunion\b|\bselect\b|\bor\b|\band\b|;))(?:--|#|/\*)
+    score: 20
+    severity: medium
+xss:
+  - id: xss_script_tag
+    description: Script tag injection
+    field: request
+    type: contains
+    pattern: <script
+    score: 70
+    severity: high
+  - id: xss_html_event_handler
+    description: HTML tag with JavaScript event handler
+    field: request
+    type: regex
+    pattern: <(?:svg|img|iframe|object|embed|form|input|details|body|meta|a)\b[^>]*(?:onload|onerror|ontoggle|onclick|onmouseover|srcdoc|javascript:)
+    score: 70
+    severity: high
+  - id: xss_javascript_uri
+    description: javascript URI execution
+    field: request
+    type: regex
+    pattern: '\bjavascript\s*:'
+    score: 60
+    severity: high
+traversal:
+  - id: traversal_dotdot
+    description: Directory traversal using decoded dot-dot path
+    field: url
+    type: regex
+    pattern: (?:^|/)\.\.(?:/|$)
+    score: 60
+    severity: high
+  - id: traversal_encoded_dotdot_raw
+    description: Encoded directory traversal in raw request target
+    field: raw_uri
+    type: regex
+    pattern: '%(?:25)*2e%(?:25)*2e|%(?:25)*2e\.|\.%(?:25)*2e'
+    score: 45
+    severity: medium
+scanner:
+  - id: scanner_sqlmap_ua
+    description: sqlmap scanner User-Agent
+    field: user_agent
+    type: regex
+    pattern: \bsqlmap(?:/|\b|[-_])
+    score: 30
+    severity: medium
+  - id: scanner_nikto_ua
+    description: Nikto scanner User-Agent
+    field: user_agent
+    type: regex
+    pattern: \bnikto\b
+    score: 30
+    severity: medium
+  - id: scanner_nmap_ua
+    description: Nmap scripting engine User-Agent
+    field: user_agent
+    type: regex
+    pattern: \bnmap\b|nmap scripting engine
+    score: 25
+    severity: medium
+sensitive_path:
+  - id: sensitive_admin_path
+    description: Access to sensitive admin path
+    field: uri
+    type: regex
+    pattern: (?:^|/)(?:admin|administrator|wp-admin|phpmyadmin|manager|console)(?:/|$)
+    score: 20
+    severity: low
+  - id: sensitive_admin_success_or_forbidden
+    description: Sensitive admin path with 200/401/403 response context
+    field: request
+    type: regex
+    pattern: (?=.*(?:^|/)(?:admin|administrator|wp-admin|phpmyadmin|manager|console)(?:/|$))(?=.*\b(?:status=)?(?:200|401|403)\b)
+    score: 35
+    severity: medium
+evasion:
+  - id: evasion_multi_decode
+    description: Multi-layer decoding observed
+    field: decode_depth
+    type: regex
+    pattern: ^[2-9][0-9]*$
+    score: 20
+    severity: medium
+  - id: evasion_control_chars_removed
+    description: Control or Unicode format chars removed during preprocess
+    field: removed_control_chars
+    type: contains
+    pattern: "true"
+    score: 20
+    severity: medium
