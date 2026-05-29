@@ -1,6 +1,6 @@
 # Known Issues
 
-No confirmed bugs are known yet.
+- `tests/test_ai_inference_pipeline.py` fails to collect/run because the `test_pipeline` module/package (which it imports) is missing from the remote repository.
 
 Areas requiring verification:
 - `event_id` consistency across artifacts.

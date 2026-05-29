@@ -27,13 +27,14 @@ Maintain and harden the already-implemented Phase 1 non-ML pipeline; do not rebu
     - combined + trailing custom fields
   - Added parser tests for trailing-field rejection, custom-tail acceptance, missing field failure, and field-order mismatch failure.
 - Latest test status:
-  - `pytest -q` -> 25 passed
-  - `PYTHONDONTWRITEBYTECODE=1 pytest -q -p no:cacheprovider` -> 25 passed
+  - `pytest --ignore=tests/test_ai_inference_pipeline.py -q` -> 216 passed
+  - `tests/test_ai_inference_pipeline.py` fails to collect due to missing `test_pipeline` module in remote main.
 
 ## Blockers
 
 - No critical blockers confirmed.
 - IIS sample format coverage still needs validation against real W3C IIS logs.
+- `tests/test_ai_inference_pipeline.py` is broken upstream due to a missing package (`test_pipeline`).
 
 ## Next Recommended Step
 
@@ -41,17 +42,11 @@ Focus on validation, hardening, real-log testing, schema stability, rule expansi
 
 ## Files Modified
 
-- `src/parser/apache_parser.py`
-- `src/parser/nginx_parser.py`
-- `tests/test_parser.py`
+- `src/main.py`
 - `conversation_cache/current_status.md`
-- `conversation_cache/edge_cases.md`
 - `conversation_cache/known_issues.md`
 
 ## Checks Run / Skipped
 
-- Ran: `pytest -q tests/test_parser.py` (passed: 9 tests)
-- Ran: `PYTHONDONTWRITEBYTECODE=1 pytest -q tests/test_pipeline.py` (passed: 1 test)
-- Ran: `pytest -q` (passed: 25 tests)
-- Ran: `PYTHONDONTWRITEBYTECODE=1 pytest -q -p no:cacheprovider` (passed: 25 tests)
+- Ran: `pytest --ignore=tests/test_ai_inference_pipeline.py -q` (passed: 216 tests)
 - ML implementation remains deferred to Phase 2 unless explicitly requested.
