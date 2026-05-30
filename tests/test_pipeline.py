@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -25,6 +26,7 @@ def test_pipeline_cli_generates_expected_outputs(tmp_path: Path):
             "--rules",
             "src/rules/attack_patterns.yaml",
         ],
+        env={"PIPELINE_TESTING": "true", **os.environ},
         check=True,
     )
 
@@ -96,6 +98,7 @@ def test_pipeline_cli_accepts_folder_input(tmp_path: Path):
             "--rules",
             "src/rules/attack_patterns.yaml",
         ],
+        env={"PIPELINE_TESTING": "true", **os.environ},
         check=True,
     )
 
@@ -124,6 +127,7 @@ def test_pipeline_cli_accepts_capec_csv_input(tmp_path: Path):
             "--rules",
             "src/rules/attack_patterns.yaml",
         ],
+        env={"PIPELINE_TESTING": "true", **os.environ},
         check=True,
     )
 

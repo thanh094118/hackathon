@@ -16,3 +16,4 @@ numpy
 pandas
 joblib
 scikit-learn
+sentence-transformers

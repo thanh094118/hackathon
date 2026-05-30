@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import hashlib
 import argparse
 import logging
@@ -42,16 +43,22 @@ def build_cli() -> argparse.ArgumentParser:
 		default=None,
 		help="Optional server type override; defaults to apache for log-like inputs",
 	)
+	parser.add_argument("--mongodb-uri", default=None, help="MongoDB connection URI (overrides MONGODB_URI env var)")
 	return parser
 
 
 def main() -> None:
 	logging.basicConfig(level=logging.INFO, format="%(message)s")
+	from dotenv import load_dotenv
+	load_dotenv()
+
 	args = build_cli().parse_args()
 
 	input_path = Path(args.input)
 	output_dir = Path(args.output_dir)
 	output_dir.mkdir(parents=True, exist_ok=True)
+
+	mongodb_uri = args.mongodb_uri or os.getenv("MONGODB_URI")
 
 	summaries = run_pipeline(
 		input_path=input_path,
@@ -61,6 +68,7 @@ def main() -> None:
 		ml_model_dir=Path(args.ml_model_dir),
 		ml_threshold=float(args.ml_threshold),
 		server_type=args.server_type,
+		mongodb_uri=mongodb_uri,
 	)
 
 	for summary in summaries:
@@ -81,6 +89,7 @@ def run_pipeline(
 	ml_model_dir: Optional[Path] = None,
 	ml_threshold: float = 0.5,
 	server_type: Optional[str] = None,
+	mongodb_uri: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
 	if not input_path.exists():
 		raise FileNotFoundError(f"Input path not found: {input_path}")
@@ -102,6 +111,7 @@ def run_pipeline(
 					ml_model_dir=ml_model_dir,
 					ml_threshold=ml_threshold,
 					server_type=server_type,
+					mongodb_uri=mongodb_uri,
 				)
 			)
 		return summaries
@@ -115,6 +125,7 @@ def run_pipeline(
 			ml_model_dir=ml_model_dir,
 			ml_threshold=ml_threshold,
 			server_type=server_type,
+			mongodb_uri=mongodb_uri,
 		)
 	]
 
@@ -128,6 +139,7 @@ def _run_single_pipeline(
 	ml_model_dir: Optional[Path],
 	ml_threshold: float,
 	server_type: Optional[str],
+	mongodb_uri: Optional[str] = None,
 ) -> Dict[str, Any]:
 	run_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -170,6 +182,34 @@ def _run_single_pipeline(
 		if ml_predictions:
 			scored_records = ml_predictions
 			alerts = [record for record in scored_records if record.get("should_alert")]
+
+	# Vector embedding generation & MongoDB export
+	if mongodb_uri and not os.getenv("PIPELINE_TESTING"):
+		try:
+			logging.info("[+] Generating semantic embeddings for scored records...")
+			from src.features.embedding_engine import EmbeddingEngine
+			embedding_engine = EmbeddingEngine()
+
+			# Extract texts to embed (using normalized_request, or fallback to uri/raw_log)
+			texts_to_embed = [
+				record.get("normalized_request") or record.get("uri") or record.get("raw_log") or ""
+				for record in scored_records
+			]
+			
+			embeddings = embedding_engine.get_embeddings(texts_to_embed)
+			for record, emb in zip(scored_records, embeddings):
+				record["embedding"] = emb
+
+			logging.info("[+] Exporting scored records to MongoDB Atlas...")
+			from src.exporters.mongodb_exporter import MongoDBExporter
+			db_name = os.getenv("MONGODB_DB_NAME", "security_logs")
+			coll_name = os.getenv("MONGODB_COLLECTION_NAME", "unified_logs")
+			
+			exporter = MongoDBExporter(uri=mongodb_uri, database_name=db_name, collection_name=coll_name)
+			exporter.export(scored_records)
+			exporter.close()
+		except Exception as e:
+			logging.error("[-] Failed to process/export embeddings to MongoDB: %s", e)
 
 	summary = PostProcessor().build_summary(
 		input_path=str(input_path),
