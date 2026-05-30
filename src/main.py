@@ -44,6 +44,7 @@ def build_cli() -> argparse.ArgumentParser:
 		help="Optional server type override; defaults to apache for log-like inputs",
 	)
 	parser.add_argument("--mongodb-uri", default=None, help="MongoDB connection URI (overrides MONGODB_URI env var)")
+	parser.add_argument("--debug-local", action="store_true", help="Export debug CSV/JSONL files locally to disk")
 	return parser
 
 
@@ -69,6 +70,7 @@ def main() -> None:
 		ml_threshold=float(args.ml_threshold),
 		server_type=args.server_type,
 		mongodb_uri=mongodb_uri,
+		debug_local=bool(args.debug_local),
 	)
 
 	for summary in summaries:
@@ -90,6 +92,7 @@ def run_pipeline(
 	ml_threshold: float = 0.5,
 	server_type: Optional[str] = None,
 	mongodb_uri: Optional[str] = None,
+	debug_local: bool = False,
 ) -> List[Dict[str, Any]]:
 	if not input_path.exists():
 		raise FileNotFoundError(f"Input path not found: {input_path}")
@@ -112,6 +115,7 @@ def run_pipeline(
 					ml_threshold=ml_threshold,
 					server_type=server_type,
 					mongodb_uri=mongodb_uri,
+					debug_local=debug_local,
 				)
 			)
 		return summaries
@@ -126,6 +130,7 @@ def run_pipeline(
 			ml_threshold=ml_threshold,
 			server_type=server_type,
 			mongodb_uri=mongodb_uri,
+			debug_local=debug_local,
 		)
 	]
 
@@ -140,6 +145,7 @@ def _run_single_pipeline(
 	ml_threshold: float,
 	server_type: Optional[str],
 	mongodb_uri: Optional[str] = None,
+	debug_local: bool = False,
 ) -> Dict[str, Any]:
 	run_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -183,34 +189,6 @@ def _run_single_pipeline(
 			scored_records = ml_predictions
 			alerts = [record for record in scored_records if record.get("should_alert")]
 
-	# Vector embedding generation & MongoDB export
-	if mongodb_uri and not os.getenv("PIPELINE_TESTING"):
-		try:
-			logging.info("[+] Generating semantic embeddings for scored records...")
-			from src.features.embedding_engine import EmbeddingEngine
-			embedding_engine = EmbeddingEngine()
-
-			# Extract texts to embed (using normalized_request, or fallback to uri/raw_log)
-			texts_to_embed = [
-				record.get("normalized_request") or record.get("uri") or record.get("raw_log") or ""
-				for record in scored_records
-			]
-			
-			embeddings = embedding_engine.get_embeddings(texts_to_embed)
-			for record, emb in zip(scored_records, embeddings):
-				record["embedding"] = emb
-
-			logging.info("[+] Exporting scored records to MongoDB Atlas...")
-			from src.exporters.mongodb_exporter import MongoDBExporter
-			db_name = os.getenv("MONGODB_DB_NAME", "security_logs")
-			coll_name = os.getenv("MONGODB_COLLECTION_NAME", "unified_logs")
-			
-			exporter = MongoDBExporter(uri=mongodb_uri, database_name=db_name, collection_name=coll_name)
-			exporter.export(scored_records)
-			exporter.close()
-		except Exception as e:
-			logging.error("[-] Failed to process/export embeddings to MongoDB: %s", e)
-
 	summary = PostProcessor().build_summary(
 		input_path=str(input_path),
 		server_type=detected_server_type,
@@ -230,18 +208,95 @@ def _run_single_pipeline(
 		"continuation_merged_records": sum(1 for record in raw_records if record.get("was_continuation_merged")),
 	}
 
-	_export_stage_outputs(
-		run_output_dir=run_output_dir,
-		prefix=prefix,
-		raw_records=raw_records,
-		parsed_logs=parsed_logs,
-		normalized_logs=normalized_logs,
-		preprocessed_requests=preprocessed_requests,
-		feature_records=feature_records,
-		ml_predictions=ml_predictions,
-		alerts=alerts,
-		summary=summary,
-	)
+	# Vector embedding generation & MongoDB export
+	if mongodb_uri:
+		_export_to_mongodb(
+			mongodb_uri=mongodb_uri,
+			scored_records=scored_records,
+			alerts=alerts,
+			summary=summary,
+			prefix=prefix,
+		)
+
+	if debug_local:
+		_export_stage_outputs(
+			run_output_dir=run_output_dir,
+			prefix=prefix,
+			raw_records=raw_records,
+			parsed_logs=parsed_logs,
+			normalized_logs=normalized_logs,
+			preprocessed_requests=preprocessed_requests,
+			feature_records=feature_records,
+			ml_predictions=ml_predictions,
+			alerts=alerts,
+			summary=summary,
+		)
+
+	return summary
+
+
+def _export_to_mongodb(
+	*,
+	mongodb_uri: str,
+	scored_records: List[Dict[str, Any]],
+	alerts: List[Dict[str, Any]],
+	summary: Dict[str, Any],
+	prefix: str,
+) -> None:
+	"""Export scored records, alerts, and run summary to MongoDB collections."""
+	if os.getenv("PIPELINE_TESTING"):
+		logging.info("[+] Pipeline is running in test mode. Skipping MongoDB Atlas export.")
+		return
+
+	try:
+		logging.info("[+] Generating semantic embeddings for scored records...")
+		from src.features.embedding_engine import EmbeddingEngine
+		embedding_engine = EmbeddingEngine()
+
+		# Extract texts to embed (using normalized_request, or fallback to uri/raw_log)
+		texts_to_embed = [
+			record.get("normalized_request") or record.get("uri") or record.get("raw_log") or ""
+			for record in scored_records
+		]
+		
+		embeddings = embedding_engine.get_embeddings(texts_to_embed)
+		for record, emb in zip(scored_records, embeddings):
+			record["embedding"] = emb
+
+		logging.info("[+] Exporting records to MongoDB Atlas collections...")
+		from src.exporters.mongodb_exporter import MongoDBExporter
+		db_name = os.getenv("MONGODB_DB_NAME", "security_logs")
+		
+		# 1. Export requests (all scored records)
+		logging.info(f"[+] Exporting {len(scored_records)} scored records to 'requests' collection...")
+		exporter_req = MongoDBExporter(uri=mongodb_uri, database_name=db_name, collection_name="requests")
+		exporter_req.export(scored_records)
+		exporter_req.close()
+
+		# 2. Export incidents (alerts only)
+		if alerts:
+			logging.info(f"[+] Exporting {len(alerts)} alert records to 'incidents' collection...")
+			exporter_inc = MongoDBExporter(uri=mongodb_uri, database_name=db_name, collection_name="incidents")
+			exporter_inc.export(alerts)
+			exporter_inc.close()
+
+		# 3. Export pipeline_runs (summary of the run)
+		logging.info("[+] Exporting pipeline run summary to 'pipeline_runs' collection...")
+		import datetime
+		summary_copy = dict(summary)
+		now_utc = datetime.datetime.now(datetime.timezone.utc)
+		summary_copy["timestamp"] = now_utc.isoformat()
+		import hashlib
+		digest = hashlib.sha1(f"{prefix}:{summary_copy['timestamp']}".encode("utf-8", errors="ignore")).hexdigest()[:12]
+		summary_copy["event_id"] = f"run:{prefix}:{digest}"
+		
+		exporter_run = MongoDBExporter(uri=mongodb_uri, database_name=db_name, collection_name="pipeline_runs")
+		exporter_run.export([summary_copy])
+		exporter_run.close()
+
+	except Exception as e:
+		logging.error("[-] Failed to export to MongoDB: %s", e)
+
 
 	return summary
 

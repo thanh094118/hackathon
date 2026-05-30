@@ -25,6 +25,7 @@ def test_pipeline_cli_generates_expected_outputs(tmp_path: Path):
             str(output_dir),
             "--rules",
             "src/rules/attack_patterns.yaml",
+            "--debug-local",
         ],
         env={"PIPELINE_TESTING": "true", **os.environ},
         check=True,
@@ -97,6 +98,7 @@ def test_pipeline_cli_accepts_folder_input(tmp_path: Path):
             str(output_dir),
             "--rules",
             "src/rules/attack_patterns.yaml",
+            "--debug-local",
         ],
         env={"PIPELINE_TESTING": "true", **os.environ},
         check=True,
@@ -126,6 +128,7 @@ def test_pipeline_cli_accepts_capec_csv_input(tmp_path: Path):
             str(output_dir),
             "--rules",
             "src/rules/attack_patterns.yaml",
+            "--debug-local",
         ],
         env={"PIPELINE_TESTING": "true", **os.environ},
         check=True,
@@ -150,3 +153,47 @@ def test_pipeline_cli_accepts_capec_csv_input(tmp_path: Path):
     assert summary["counts"]["raw_lines"] == 1
     assert summary["counts"]["parsed_logs"] == 1
     assert summary["server_type"] == "apache"
+
+
+def test_pipeline_cli_no_local_outputs_by_default(tmp_path: Path):
+    input_log = tmp_path / "access.log"
+    input_log.write_text(
+        '127.0.0.1 - - [10/Oct/2000:13:55:36 +0000] "GET /index.php?id=1 HTTP/1.1" 200 123 "-" "sqlmap"\n',
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "run_outputs"
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "src.main",
+            "--input",
+            str(input_log),
+            "--output-dir",
+            str(output_dir),
+            "--rules",
+            "src/rules/attack_patterns.yaml",
+        ],
+        env={"PIPELINE_TESTING": "true", **os.environ},
+        check=True,
+    )
+
+    # By default, files (like report or collector_results) should NOT exist.
+    # We check that the directory is empty or does not contain expected files.
+    # Note that run_output_dir is created, but no files are exported.
+    unexpected_files = [
+        "collector_results/apache_access_raw_lines.jsonl",
+        "parser_results/apache_access_parsed_logs.jsonl",
+        "normalizer_results/apache_access_normalized_logs.jsonl",
+        "normalizer_results/apache_access_normalized_logs.csv",
+        "preprocessor_results/apache_access_preprocessed_requests.jsonl",
+        "feature_results/apache_access_features.csv",
+        "detector_results/apache_access_alerts.jsonl",
+        "detector_results/apache_access_alerts.csv",
+        "report/apache_access_report.md",
+        "report/apache_access_run_summary.json",
+    ]
+    for file_name in unexpected_files:
+        assert not (output_dir / file_name).exists(), f"File should not exist: {file_name}"
+
