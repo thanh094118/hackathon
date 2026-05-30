@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # 1. Cơ sở dữ liệu chính
+  mongodb:
+    image: mongodb/mongodb-community-server:latest
+    container_name: mongodb-server
+    hostname: mongodb-server
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  # 2. Bộ máy Tìm kiếm Vector
+  mongot:
+    image: mongodb/mongodb-community-search:latest
+    container_name: mongodb-search
+    hostname: mongodb-search
+    ports:
+      - "27018:27018"
+    environment:
+      - MONGOT_MONGO_URI=mongodb://mongodb-server:27017/?replicaSet=rs0
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  # 3. Giao diện quản lý trực quan (CHẠY TRÊN TRÌNH DUYỆT)
+  compass:
+    image: mongodb/mongodb-compass:latest
+    container_name: mongodb-compass-ui
+    ports:
+      - "8082:8080" # Bạn sẽ truy cập giao diện qua cổng này
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  mongodb_data:

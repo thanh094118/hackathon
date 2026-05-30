@@ -1,0 +1,39 @@
+{
+  "output": {
+    "filePath": "repomix-output.txt",
+    "style": "plain",
+    "headerText": "Hackathon Repository compacted for LLM analysis"
+  },
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "data/**",
+      "outputs/**",
+      "conversation_cache/**",
+      "models/**",
+      ".pytest_cache/**",
+      "**/__pycache__/**",
+      "**/*.pyc",
+      "**/*.pyo",
+      "**/*.pyd",
+      "**/*.joblib",
+      "**/*.pkl",
+      "**/*.pickle",
+      "**/*.pdf",
+      "**/*.png",
+      "**/*.jpg",
+      "**/*.jpeg",
+      "**/*.gif",
+      "**/*.zip",
+      "**/*.tar.gz",
+      "**/*.tgz",
+      ".vscode/**",
+      ".env",
+      ".env.template",
+      "a.puml",
+      "convert.py",
+      "a.md"
+    ]
+  }
+}
