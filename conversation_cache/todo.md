@@ -5,7 +5,13 @@
 - [x] Add `tests/test_alerts.py` covering flexible mapping, formatting, dispatcher behavior, dry-runs, and missing credentials.
 - [x] Add placeholder-only `.env.example` alert configuration.
 - [x] Add `scripts/test_alerts_manual.py` for manual alert module dry-run checks.
-- [ ] Future: wire `AlertDispatcher` into the main pipeline after integration requirements are defined.
+- [x] Add `src/notifications/alerts.py` compatibility wrapper over `src.alerts`.
+- [x] Integrate high-risk incident alert dispatch in `MongoDBExporter`.
+- [x] Add shared attack simulator payloads and engine under `src/simulator/`.
+- [x] Add dashboard Attack Simulator tab and navigation item.
+- [x] Add `scripts/simulate_attacks.py` CLI simulator.
+- [x] Add tests for notifications wrapper and attack simulator.
+- [ ] Future: validate real SMTP/Telegram/Slack and live MongoDB alert delivery in a configured demo environment.
 
 - [x] Add `src/scoring/mongodb_queries.py` centralized query helper module for dashboard complex queries.
 - [x] Refactor `src/dashboard/query_adapter.py` delegation to centralized MongoDB query functions.

@@ -8,6 +8,16 @@
   - Removed generated Python cache directories under `src/` and `tests/` after verification.
   - Added `scripts/test_alerts_manual.py` for safe manual dry-run testing of Email, Telegram, and Slack alert dispatch.
 
+- **Real-Time Alerts & Attack Simulator (2026-05-31)**:
+  - Added `src/notifications/alerts.py` wrapper that reuses `src.alerts` for high-risk incident alerting.
+  - Integrated alert dispatch into `MongoDBExporter` only for exported `incidents` records, with safe failure logging.
+  - Added shared simulator engine and payloads under `src/simulator/`.
+  - Added Streamlit Attack Simulator tab and dashboard navigation entry.
+  - Added CLI simulator at `scripts/simulate_attacks.py`.
+  - Added tests for notification wrapper and simulator behavior.
+  - Removed `.env` and `.env.template` from Git tracking; `.env.template` local content was sanitized to placeholders.
+  - Verified with `python -m compileall src`, `pytest -q tests/test_notifications_wrapper.py tests/test_attack_simulator.py`, and `pytest -q tests/test_alerts.py`.
+
 - **MongoDB Exporter Chunking**:
   - Implemented command chunking in `src/exporters/mongodb_exporter.py` with `chunk_size = 1000`.
   - This successfully prevents TCP socket timeouts and connection closed errors on large bulk writes.

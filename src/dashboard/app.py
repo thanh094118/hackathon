@@ -16,6 +16,7 @@ from src.dashboard.components import render_status_badge
 from src.dashboard.investigator_tab import render_investigator_tab
 from src.dashboard.overview_tab import render_overview_tab
 from src.dashboard.query_adapter import DashboardQueryAdapter
+from src.dashboard.simulator_tab import render_simulator_tab
 
 
 def _page_title() -> str:
@@ -63,7 +64,7 @@ def _render_sidebar(query_engine: DashboardQueryAdapter) -> str:
         st.markdown("### Navigation")
         navigation = st.radio(
             "Choose workspace",
-            options=["SOC Overview", "Threat Investigator"],
+            options=["SOC Overview", "Threat Investigator", "Attack Simulator"],
             label_visibility="collapsed",
         )
 
@@ -100,8 +101,10 @@ def main() -> None:
 
     if navigation == "SOC Overview":
         render_overview_tab(query_engine)
-    else:
+    elif navigation == "Threat Investigator":
         render_investigator_tab(query_engine)
+    else:
+        render_simulator_tab(query_engine)
 
 
 if __name__ == "__main__":

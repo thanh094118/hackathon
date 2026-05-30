@@ -8,6 +8,7 @@ try:
     HAS_PYMONGO = True
 except ImportError:
     HAS_PYMONGO = False
+    certifi = None
     # Define dummy classes for type hinting if needed
     class MongoClient: pass
     class UpdateOne: pass
@@ -35,12 +36,15 @@ class MongoDBExporter:
         self.collection = None
 
     def connect(self):
+        if not HAS_PYMONGO:
+            raise ImportError("pymongo is required for MongoDB export")
+
         try:
             # Use certifi for up-to-date CA certificates
             self.client = MongoClient(
                 self.uri,
                 tls=True,
-                tlsCAFile=certifi.where() if HAS_PYMONGO else None,
+                tlsCAFile=certifi.where() if certifi else None,
                 tlsAllowInvalidCertificates=False
             )
             self.client.admin.command('ismaster')
@@ -52,7 +56,7 @@ class MongoDBExporter:
             raise
 
     def export(self, records: List[Dict]):
-        if not self.collection:
+        if self.collection is None:
             self.connect()
 
         if not records:
@@ -60,6 +64,7 @@ class MongoDBExporter:
 
         try:
             operations = []
+            exported_records = []
             for record in records:
                 event_id = record.get("event_id")
                 if not event_id:
@@ -69,6 +74,7 @@ class MongoDBExporter:
                 operations.append(
                     UpdateOne({"event_id": event_id}, {"$set": record}, upsert=True)
                 )
+                exported_records.append(record)
 
             if not operations:
                 return
@@ -91,6 +97,7 @@ class MongoDBExporter:
                 f"Matched: {total_matched}, Upserted: {total_upserted}, "
                 f"Modified: {total_modified}."
             )
+            self._send_alerts_for_exported_incidents(exported_records)
             return {
                 "matched_count": total_matched,
                 "upserted_count": total_upserted,
@@ -102,6 +109,28 @@ class MongoDBExporter:
         except Exception as e:
             logging.error(f"Error exporting to MongoDB: {e}")
             raise
+
+    def _send_alerts_for_exported_incidents(self, records: List[Dict]):
+        if self.collection_name != "incidents":
+            return
+
+        try:
+            from src.notifications.alerts import send_incident_alert
+        except Exception as exc:
+            logging.warning("Alert notification wrapper is unavailable: %s", exc.__class__.__name__)
+            return
+
+        for record in records:
+            try:
+                results = send_incident_alert(record)
+                if results:
+                    failures = [result for result in results if not getattr(result, "success", False)]
+                    if failures:
+                        logging.warning("Incident alert completed with %d failed channel(s).", len(failures))
+                    else:
+                        logging.info("Incident alert dispatched for event_id=%s.", record.get("event_id"))
+            except Exception as exc:
+                logging.warning("Incident alert failed safely: %s", exc.__class__.__name__)
 
     def close(self):
         if self.client:
