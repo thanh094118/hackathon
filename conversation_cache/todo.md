@@ -4,6 +4,7 @@
 - [x] Add alert event/result models, config loader, formatter, notifier implementations, and dispatcher.
 - [x] Add `tests/test_alerts.py` covering flexible mapping, formatting, dispatcher behavior, dry-runs, and missing credentials.
 - [x] Add placeholder-only `.env.example` alert configuration.
+- [x] Add `scripts/test_alerts_manual.py` for manual alert module dry-run checks.
 - [ ] Future: wire `AlertDispatcher` into the main pipeline after integration requirements are defined.
 
 - [x] Add `src/scoring/mongodb_queries.py` centralized query helper module for dashboard complex queries.

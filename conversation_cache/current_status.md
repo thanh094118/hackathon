@@ -6,6 +6,7 @@
   - Added placeholder-only `.env.example` alert settings; local `.env` was not modified.
   - Verified with `python -m compileall src` and `pytest -q tests/test_alerts.py`.
   - Removed generated Python cache directories under `src/` and `tests/` after verification.
+  - Added `scripts/test_alerts_manual.py` for safe manual dry-run testing of Email, Telegram, and Slack alert dispatch.
 
 - **MongoDB Exporter Chunking**:
   - Implemented command chunking in `src/exporters/mongodb_exporter.py` with `chunk_size = 1000`.

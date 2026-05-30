@@ -23,7 +23,6 @@ __pycache__/
 **/.agents
 *.agents
 outputs/
-.env
 .env.template
 a.puml
 docs/detailed description.pdf
