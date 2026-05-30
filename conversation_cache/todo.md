@@ -18,4 +18,13 @@
 - [x] Resolve "Unknown" IP display in Top Attacking IPs dashboard table by migrating aggregation pipelines to handle `source_ip` vs `ip` schema mapping.
 - [x] Add dynamic dropdown filter for detection methods (All, Rules Only, ML Only, Hybrid Only) in Threat Investigator sidebar.
 - [x] Map seeded attack pattern fields (category, payload_example, mitigation) to dashboard fields (attack_type, examples, remediation) to ensure Vector Search match cards resolve correctly (Type: scanner, MITRE: T1595 | T1505) instead of displaying "Unknown" or "N/A".
+- [x] Issue 2: Advanced Aggregation Pipelines for SOC Analytics
+  - [x] Implement Coordinated Campaign Detection (APT) query logic with customizable thresholds.
+  - [x] Implement get_ip_blast_radius query logic on MongoDB and adapter/UI.
+  - [x] Update generate_attack_timeline query logic and adapter to support multi-series grouping.
+  - [x] Make Campaign thresholds configurable via Streamlit slider inputs.
+  - [x] Display Blast Radius Plotly donut chart on IP selection.
+  - [x] Render Attack Evolution Timeline as Plotly stacked bar chart.
+  - [x] Write unit tests in test_mongodb_integration.py and test_dashboard_query_adapter.py.
+  - [x] Verify all test suites pass.
 

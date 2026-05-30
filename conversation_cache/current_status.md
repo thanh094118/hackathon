@@ -26,3 +26,9 @@
   - Implemented a **Detection Method** filter in the Threat Investigator sidebar allowing the user to select: All, Rules Only, ML Only, or Hybrid Only. This dynamically filters matching incidents in the Threat Explorer.
   - Upgraded pattern normalization in `_normalize_pattern` in `src/dashboard/query_adapter.py` to correctly map database-specific seeded fields (`category`, `payload_example`, `mitigation`) to the dashboard expectations (`attack_type`, `examples`, `remediation`).
   - Verified that Vector Search Match Cards now display actual threat categories (e.g. `Type: scanner` or `Type: sqli`) and valid MITRE references (e.g. `MITRE: T1595 | T1505`) instead of displaying "Unknown" or "N/A".
+
+- **Issue 2: Advanced Aggregation Pipelines for SOC Analytics**:
+  - **Coordinated Campaign Detection (APT)**: Updated campaign detection aggregation logic to match and filter on multi-tactic profiles (size of attack type set >= 3) and high frequency (total_attacks >= 50). Added slider inputs in the dashboard to make these thresholds fully configurable by the SOC analyst.
+  - **Real-time Blast Radius**: Implemented `get_ip_blast_radius` aggregation to calculate the distribution and percentage of target URIs hit by any given attacker IP. Exposed this interactively in the "Top Attacking IPs" section via a dropdown that triggers a Plotly donut chart visualization.
+  - **Time-series Attack Evolution**: Redesigned `generate_attack_timeline` to support grouping by both truncated timestamp (`$dateTrunc` by minute/hour/day) and normalized attack type. Replaced the simple line chart with a Plotly stacked bar chart on the dashboard to visualize how attacker methods shift over time (e.g., from scanning to SQL injection).
+  - **Unit Test Coverage**: Wrote comprehensive unit tests in both `tests/test_mongodb_integration.py` and `tests/test_dashboard_query_adapter.py` covering both mock mode and live/patched pipeline aggregation queries. Verified all tests pass.

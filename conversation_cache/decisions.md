@@ -25,4 +25,8 @@
 - Reset AGENTS guidance to non-ML core pipeline baseline and keep dashboard work isolated from runtime core flow changes.
 - Mandatory sentence-transformers: enforce hard requirement for sentence-transformers and remove the fallback hashing trick.
 - Robust IP Aggregation: aggregation queries grouping or matching on IP addresses must support both `$source_ip` and `$ip` using `$ifNull` array logic or `$or` matching to remain backward-compatible with normalized fields (`source_ip`) and fallback schemas.
+- Advanced SOC Analytics Aggregations:
+  - Timeline bucketing must group by both timestamp bucket and normalized attack type to support multi-series stacked/grouped visualization.
+  - Blast Radius URI distribution query must compute percentages at the aggregation layer using `$unwind` on grouped results to minimize downstream transformation overhead.
+  - Coordinated Campaign Detection (APT) parameters (min attacks, min attack types) should be completely configurable in the query arguments and UI.
 

@@ -320,7 +320,8 @@ def get_top_attacking_ips(
 
 def detect_attack_campaigns(
     db: Any,
-    min_attacks: int = 10,
+    min_attacks: int = 50,
+    min_attack_types: int = 3,
     limit: int = 10,
     *,
     requests_collection: str = "requests",
@@ -329,7 +330,8 @@ def detect_attack_campaigns(
     if collection is None:
         return []
 
-    threshold = max(1, _safe_int(min_attacks, 10))
+    threshold = max(1, _safe_int(min_attacks, 50))
+    min_types = max(1, _safe_int(min_attack_types, 3))
     max_limit = max(1, _safe_int(limit, 10))
 
     pipeline = [
@@ -352,11 +354,8 @@ def detect_attack_campaigns(
         },
         {
             "$match": {
-                "$or": [
-                    {"total_attacks": {"$gte": threshold}},
-                    {"attack_type_count": {"$gt": 1}},
-                    {"target_count": {"$gt": 1}},
-                ]
+                "total_attacks": {"$gte": threshold},
+                "attack_type_count": {"$gte": min_types},
             }
         },
         {"$sort": {"total_attacks": -1}},
@@ -369,12 +368,84 @@ def detect_attack_campaigns(
         return []
 
 
+def get_ip_blast_radius(
+    db: Any,
+    ip: str,
+    limit: int = 10,
+    *,
+    requests_collection: str = "requests",
+) -> List[Dict[str, Any]]:
+    collection = _collection(db, requests_collection)
+    if collection is None or not ip:
+        return []
+
+    match_query = {
+        "$or": [
+            {"source_ip": str(ip)},
+            {"ip": str(ip)}
+        ]
+    }
+    max_limit = max(1, _safe_int(limit, 10))
+
+    pipeline = [
+        {"$match": match_query},
+        {
+            "$group": {
+                "_id": {"$ifNull": ["$uri", "Unknown"]},
+                "uri_count": {"$sum": 1}
+            }
+        },
+        {
+            "$group": {
+                "_id": None,
+                "grand_total": {"$sum": "$uri_count"},
+                "uris": {
+                    "$push": {
+                        "uri": "$_id",
+                        "uri_count": "$uri_count"
+                    }
+                }
+            }
+        },
+        {"$unwind": "$uris"},
+        {
+            "$project": {
+                "_id": 0,
+                "uri": "$uris.uri",
+                "count": "$uris.uri_count",
+                "percentage": {
+                    "$cond": [
+                        {"$eq": ["$grand_total", 0]},
+                        0.0,
+                        {
+                            "$multiply": [
+                                {"$divide": ["$uris.uri_count", "$grand_total"]},
+                                100.0
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        {"$sort": {"count": -1}},
+        {"$limit": max_limit}
+    ]
+
+    try:
+        return [dict(row) for row in collection.aggregate(pipeline, allowDiskUse=True)]
+    except Exception as e:
+        logging.error(f"Error in get_ip_blast_radius: {e}")
+        return []
+
+
 def generate_attack_timeline(
     db: Any,
     ip: Optional[str] = None,
-    hours_bucket: int = 1,
+    bucket_size: int = 1,
+    unit: str = "hour",
     limit: int = 100,
     *,
+    hours_bucket: Optional[int] = None,
     requests_collection: str = "requests",
 ) -> List[Dict[str, Any]]:
     collection = _collection(db, requests_collection)
@@ -388,7 +459,8 @@ def generate_attack_timeline(
             {"ip": str(ip)}
         ]
 
-    bucket_size = max(1, _safe_int(hours_bucket, 1))
+    b_size = max(1, _safe_int(hours_bucket if hours_bucket is not None else bucket_size, 1))
+    t_unit = str(unit) if hours_bucket is None else "hour"
     max_limit = max(1, _safe_int(limit, 100))
 
     pipeline = [
@@ -402,6 +474,9 @@ def generate_attack_timeline(
                         "onError": None,
                         "onNull": None,
                     }
+                },
+                "_attack_type": {
+                    "$ifNull": ["$attack_type", {"$ifNull": ["$ml_attack_type", "Unknown"]}]
                 }
             }
         },
@@ -409,18 +484,28 @@ def generate_attack_timeline(
         {
             "$group": {
                 "_id": {
-                    "$dateTrunc": {
-                        "date": "$_timeline_ts",
-                        "unit": "hour",
-                        "binSize": bucket_size,
-                    }
+                    "timestamp": {
+                        "$dateTrunc": {
+                            "date": "$_timeline_ts",
+                            "unit": t_unit,
+                            "binSize": b_size,
+                        }
+                    },
+                    "attack_type": "$_attack_type"
                 },
                 "count": {"$sum": 1},
             }
         },
-        {"$sort": {"_id": 1}},
+        {"$sort": {"_id.timestamp": 1, "_id.attack_type": 1}},
         {"$limit": max_limit},
-        {"$project": {"_id": 0, "timestamp": "$_id", "count": 1}},
+        {
+            "$project": {
+                "_id": 0,
+                "timestamp": "$_id.timestamp",
+                "attack_type": "$_id.attack_type",
+                "count": 1
+            }
+        },
     ]
 
     try:

@@ -513,41 +513,89 @@ class DashboardQueryAdapter:
 
         return self._finalize_top_ips(mapped, limit)
 
-    def get_attack_timeline(self) -> List[Dict[str, Any]]:
+    def get_attack_timeline(self, bucket_size: int = 5, unit: str = "minute") -> List[Dict[str, Any]]:
         if self.is_mock_mode():
             return self._build_timeline_from_records(self._mock["requests"])
 
         if not self.requests_collection_name:
             return []
 
-        rows = self._query_attack_timeline()
+        rows = self._query_attack_timeline(bucket_size=bucket_size, unit=unit)
         if rows:
             timeline: List[Dict[str, Any]] = []
             for row in rows:
                 timestamp_value = _first_non_empty(row, "timestamp", "_id")
                 timestamp_text = _timestamp_to_text(timestamp_value)
+                attack_type = str(row.get("attack_type") or "Unknown")
                 count = _safe_int(row.get("count"), 0)
                 if not timestamp_text or count <= 0:
                     continue
-                timeline.append({"timestamp": timestamp_text, "count": count})
+                timeline.append({
+                    "timestamp": timestamp_text,
+                    "attack_type": attack_type,
+                    "count": count
+                })
             if timeline:
-                timeline.sort(key=lambda item: item.get("timestamp", ""))
+                timeline.sort(key=lambda item: (item.get("timestamp", ""), item.get("attack_type", "")))
                 return timeline
 
         recent_records = self._find_many(
             self.requests_collection_name,
             self._malicious_match_query(),
-            projection={"timestamp": 1, "attack_type": 1, "prediction": 1, "risk_score": 1},
+            projection={"timestamp": 1, "attack_type": 1, "prediction": 1, "risk_score": 1, "ml_attack_type": 1},
             limit=10000,
             sort=[("timestamp", 1)],
         )
         return self._build_timeline_from_records(recent_records)
 
-    def get_active_campaigns(self, min_attacks: int = 10) -> List[Dict[str, Any]]:
+    def get_ip_blast_radius(self, ip: str) -> List[Dict[str, Any]]:
+        ip = str(ip or "").strip()
+        if not ip:
+            return []
+
+        if self.is_mock_mode():
+            matched = [
+                row for row in self._mock["requests"]
+                if str(row.get("ip")) == ip or str(row.get("source_ip")) == ip
+            ]
+            if matched:
+                counts: Dict[str, int] = {}
+                for row in matched:
+                    uri = str(row.get("uri") or "Unknown")
+                    counts[uri] = counts.get(uri, 0) + 1
+                total = sum(counts.values())
+                return [
+                    {
+                        "uri": uri,
+                        "count": count,
+                        "percentage": round((count / total) * 100.0, 1)
+                    }
+                    for uri, count in sorted(counts.items(), key=lambda x: x[1], reverse=True)
+                ]
+            return [
+                {"uri": "/login", "count": 8, "percentage": 80.0},
+                {"uri": "/api/users", "count": 2, "percentage": 20.0}
+            ]
+
+        rows = self._query_ip_blast_radius(ip)
+        if not rows:
+            return []
+
+        return [
+            {
+                "uri": str(row.get("uri") or "Unknown"),
+                "count": _safe_int(row.get("count"), 0),
+                "percentage": round(_safe_number(row.get("percentage"), 0.0), 2)
+            }
+            for row in rows
+        ]
+
+    def get_active_campaigns(self, min_attacks: int = 50, min_attack_types: int = 3) -> List[Dict[str, Any]]:
         threshold = max(1, int(min_attacks))
+        min_types = max(1, int(min_attack_types))
 
         if not self.is_mock_mode():
-            rows = self._query_attack_campaigns(min_attacks=threshold, limit=200)
+            rows = self._query_attack_campaigns(min_attacks=threshold, min_attack_types=min_types, limit=200)
             if rows:
                 campaigns: List[Dict[str, Any]] = []
                 for row in rows:
@@ -600,7 +648,7 @@ class DashboardQueryAdapter:
 
             if (
                 total_attacks >= threshold
-                or len(attack_types) > 1
+                or len(attack_types) >= min_types
                 or len(target_uris) > 1
             ):
                 campaigns.append(
@@ -932,7 +980,7 @@ class DashboardQueryAdapter:
         except Exception:
             return []
 
-    def _query_attack_timeline(self) -> List[Dict[str, Any]]:
+    def _query_attack_timeline(self, bucket_size: int = 5, unit: str = "minute") -> List[Dict[str, Any]]:
         if self.db is None or mongodb_queries is None:
             return []
         if not hasattr(mongodb_queries, "generate_attack_timeline"):
@@ -942,11 +990,12 @@ class DashboardQueryAdapter:
                 return mongodb_queries.generate_attack_timeline(
                     self.db,
                     ip=None,
-                    hours_bucket=1,
+                    bucket_size=bucket_size,
+                    unit=unit,
                     limit=1000,
                     requests_collection=self.requests_collection_name,
                 )
-            return mongodb_queries.generate_attack_timeline(self.db, ip=None, hours_bucket=1, limit=1000)
+            return mongodb_queries.generate_attack_timeline(self.db, ip=None, bucket_size=bucket_size, unit=unit, limit=1000)
         except TypeError:
             try:
                 return mongodb_queries.generate_attack_timeline(self.db, ip=None, hours_bucket=1, limit=1000)
@@ -955,7 +1004,23 @@ class DashboardQueryAdapter:
         except Exception:
             return []
 
-    def _query_attack_campaigns(self, *, min_attacks: int, limit: int) -> List[Dict[str, Any]]:
+    def _query_ip_blast_radius(self, ip: str) -> List[Dict[str, Any]]:
+        if self.db is None or mongodb_queries is None:
+            return []
+        if not hasattr(mongodb_queries, "get_ip_blast_radius"):
+            return []
+        try:
+            if self.requests_collection_name:
+                return mongodb_queries.get_ip_blast_radius(
+                    self.db,
+                    ip=ip,
+                    requests_collection=self.requests_collection_name,
+                )
+            return mongodb_queries.get_ip_blast_radius(self.db, ip=ip)
+        except Exception:
+            return []
+
+    def _query_attack_campaigns(self, *, min_attacks: int, min_attack_types: int = 3, limit: int) -> List[Dict[str, Any]]:
         if self.db is None or mongodb_queries is None:
             return []
         if not hasattr(mongodb_queries, "detect_attack_campaigns"):
@@ -965,10 +1030,11 @@ class DashboardQueryAdapter:
                 return mongodb_queries.detect_attack_campaigns(
                     self.db,
                     min_attacks=min_attacks,
+                    min_attack_types=min_attack_types,
                     limit=limit,
                     requests_collection=self.requests_collection_name,
                 )
-            return mongodb_queries.detect_attack_campaigns(self.db, min_attacks=min_attacks, limit=limit)
+            return mongodb_queries.detect_attack_campaigns(self.db, min_attacks=min_attacks, min_attack_types=min_attack_types, limit=limit)
         except TypeError:
             try:
                 return mongodb_queries.detect_attack_campaigns(self.db, min_attacks=min_attacks, limit=limit)
@@ -1145,7 +1211,7 @@ class DashboardQueryAdapter:
         return "low"
 
     def _build_timeline_from_records(self, records: List[Mapping[str, Any]]) -> List[Dict[str, Any]]:
-        buckets: Dict[str, int] = {}
+        buckets: Dict[tuple[str, str], int] = {}
         for record in records:
             if not _is_malicious_record(record):
                 continue
@@ -1155,11 +1221,18 @@ class DashboardQueryAdapter:
             if parsed is None:
                 continue
 
-            bucket = parsed.replace(minute=0, second=0, microsecond=0)
+            # 5-minute bucketing for nicer charts:
+            minute_rounded = (parsed.minute // 5) * 5
+            bucket = parsed.replace(minute=minute_rounded, second=0, microsecond=0)
             key = bucket.isoformat()
-            buckets[key] = buckets.get(key, 0) + 1
 
-        out = [{"timestamp": key, "count": count} for key, count in sorted(buckets.items())]
+            attack_type = _normalize_attack_type(_first_non_empty(record, "attack_type", "prediction.attack_type", "ml_attack_type"))
+            buckets[(key, attack_type)] = buckets.get((key, attack_type), 0) + 1
+
+        out = [
+            {"timestamp": ts, "attack_type": at, "count": count}
+            for (ts, at), count in sorted(buckets.items(), key=lambda x: x[0])
+        ]
         return out
 
     def _finalize_top_ips(self, grouped_rows: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:

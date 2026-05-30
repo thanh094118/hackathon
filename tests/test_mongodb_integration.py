@@ -8,7 +8,10 @@ from src.scoring.mongodb_queries import (
     get_ip_threat_scores,
     get_threat_timeline,
     search_patterns_by_text,
-    search_logs_by_text
+    search_logs_by_text,
+    detect_attack_campaigns,
+    get_ip_blast_radius,
+    generate_attack_timeline
 )
 
 
@@ -155,3 +158,77 @@ def test_search_by_text_helpers():
     logs = search_logs_by_text(mock_collection, "some log", mock_engine)
     assert len(logs) == 1
     assert logs[0]["event_id"] == "evt_test"
+
+
+def test_detect_attack_campaigns_apt_thresholds():
+    mock_db = MagicMock()
+    mock_collection = MagicMock()
+    mock_db.__getitem__.return_value = mock_collection
+    mock_collection.aggregate.return_value = [
+        {
+            "ip": "1.2.3.4",
+            "total_attacks": 60,
+            "attack_types": ["SQLI", "XSS", "PATH_TRAVERSAL"],
+            "target_uris": ["/login", "/api"],
+            "first_seen": "2026-05-30T10:00:00Z",
+            "last_seen": "2026-05-30T11:00:00Z"
+        }
+    ]
+
+    results = detect_attack_campaigns(mock_db, min_attacks=50, min_attack_types=3, limit=5)
+    assert len(results) == 1
+    assert results[0]["ip"] == "1.2.3.4"
+    assert results[0]["total_attacks"] == 60
+
+    # Verify pipeline stages
+    pipeline = mock_collection.aggregate.call_args[0][0]
+    match_stages = [stage["$match"] for stage in pipeline if "$match" in stage]
+    # Check that second match uses strict And (total_attacks and attack_type_count)
+    assert len(match_stages) >= 2
+    assert "total_attacks" in match_stages[-1]
+    assert "attack_type_count" in match_stages[-1]
+    assert match_stages[-1]["total_attacks"] == {"$gte": 50}
+    assert match_stages[-1]["attack_type_count"] == {"$gte": 3}
+
+
+def test_get_ip_blast_radius():
+    mock_db = MagicMock()
+    mock_collection = MagicMock()
+    mock_db.__getitem__.return_value = mock_collection
+    mock_collection.aggregate.return_value = [
+        {"uri": "/login", "count": 8, "percentage": 80.0},
+        {"uri": "/api/users", "count": 2, "percentage": 20.0}
+    ]
+
+    results = get_ip_blast_radius(mock_db, ip="1.2.3.4")
+    assert len(results) == 2
+    assert results[0]["uri"] == "/login"
+    assert results[0]["percentage"] == 80.0
+
+    pipeline = mock_collection.aggregate.call_args[0][0]
+    # Verify match stage on ip
+    assert "$match" in pipeline[0]
+    assert "$or" in pipeline[0]["$match"]
+
+
+def test_generate_attack_timeline_multi_series():
+    mock_db = MagicMock()
+    mock_collection = MagicMock()
+    mock_db.__getitem__.return_value = mock_collection
+    mock_collection.aggregate.return_value = [
+        {"timestamp": "2026-05-30T10:00:00Z", "attack_type": "SQLI", "count": 15},
+        {"timestamp": "2026-05-30T10:00:00Z", "attack_type": "XSS", "count": 5}
+    ]
+
+    results = generate_attack_timeline(mock_db, bucket_size=5, unit="minute")
+    assert len(results) == 2
+    assert results[0]["attack_type"] == "SQLI"
+    assert results[0]["count"] == 15
+
+    pipeline = mock_collection.aggregate.call_args[0][0]
+    # Verify group stage groups by both timestamp and attack_type
+    group_stage = next(stage["$group"] for stage in pipeline if "$group" in stage)
+    assert "timestamp" in group_stage["_id"]
+    assert "attack_type" in group_stage["_id"]
+    assert "$dateTrunc" in str(group_stage["_id"]["timestamp"])
+
