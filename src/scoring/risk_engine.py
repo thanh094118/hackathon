@@ -16,6 +16,20 @@ class RiskEngine:
 
     def score(self, record: Dict) -> Dict:
         rule_score = self._to_int(record.get("rule_score"))
+        
+        # Integrate ML prediction if present and predicted as an attack
+        ml_score = 0
+        ml_label = record.get("ml_label")
+        if ml_label == "attack":
+            ml_prob = record.get("ml_attack_probability", 0.0)
+            try:
+                ml_score = int(float(ml_prob) * 100)
+            except (TypeError, ValueError):
+                ml_score = 70  # Default ML threshold baseline
+        
+        # Base score is the maximum of the rules-based and ML-based score
+        base_score = max(rule_score, ml_score)
+        
         bonus = 0
 
         if self._to_int(record.get("feature_has_sql_keyword")):
@@ -41,7 +55,7 @@ class RiskEngine:
         if status_code >= 500:
             bonus += 3
 
-        risk_score = min(100, rule_score + bonus)
+        risk_score = min(100, base_score + bonus)
         final_label = self._label_from_score(risk_score)
 
         return {

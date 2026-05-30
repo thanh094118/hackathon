@@ -55,7 +55,7 @@ def setup_indexes():
         type="vectorSearch"
     )
 
-    collections_to_index = [log_collection_name, pattern_collection_name]
+    collections_to_index = list(set(["requests", log_collection_name, pattern_collection_name]))
 
     for coll_name in collections_to_index:
         logging.info(f"Setting up collection '{coll_name}'...")

@@ -34,7 +34,7 @@ def build_cli() -> argparse.ArgumentParser:
 	parser.add_argument("--input", required=True, help="Input file or folder path")
 	parser.add_argument("--output-dir", required=True, help="Output directory")
 	parser.add_argument("--rules", default="src/rules/attack_patterns.yaml", help="Rule YAML path")
-	parser.add_argument("--ml-enable", action="store_true", help="Enable ML inference if model artifacts are available")
+	parser.add_argument("--ml-enable",default=True, action="store_true", help="Enable ML inference if model artifacts are available")
 	parser.add_argument("--ml-model-dir", default="models/ml", help="Directory containing trained ML artifacts")
 	parser.add_argument("--ml-threshold", type=float, default=0.5, help="Binary attack threshold for ML inference")
 	parser.add_argument(
@@ -170,24 +170,31 @@ def _run_single_pipeline(
 	detector = RuleDetector(rules_path=rules_path, enrich=False)
 	risk_engine = RiskEngine()
 
-	scored_records: List[Dict[str, Any]] = []
-	alerts: List[Dict[str, Any]] = []
+	# 1. Rules detection
+	rule_records: List[Dict[str, Any]] = []
 	for record in feature_records:
 		detection = detector.detect(record)
 		enriched = dict(record)
 		enriched.update(detection)
-		scored = risk_engine.score(enriched)
+		rule_records.append(enriched)
+
+	# 2. ML predictions in parallel if enabled
+	ml_predictions: List[Dict[str, Any]] = []
+	if ml_enable:
+		ml_predictions = _apply_ml_predictions(rule_records, ml_model_dir, ml_threshold)
+		if ml_predictions:
+			rule_records = ml_predictions
+
+	# 3. Aggregation via RiskEngine
+	scored_records: List[Dict[str, Any]] = []
+	alerts: List[Dict[str, Any]] = []
+	for record in rule_records:
+		scored = risk_engine.score(record)
+		enriched = dict(record)
 		enriched.update(scored)
 		scored_records.append(enriched)
 		if enriched.get("should_alert"):
 			alerts.append(enriched)
-
-	ml_predictions: List[Dict[str, Any]] = []
-	if ml_enable:
-		ml_predictions = _apply_ml_predictions(scored_records, ml_model_dir, ml_threshold)
-		if ml_predictions:
-			scored_records = ml_predictions
-			alerts = [record for record in scored_records if record.get("should_alert")]
 
 	summary = PostProcessor().build_summary(
 		input_path=str(input_path),
@@ -253,11 +260,14 @@ def _export_to_mongodb(
 		from src.features.embedding_engine import EmbeddingEngine
 		embedding_engine = EmbeddingEngine()
 
-		# Extract texts to embed (using normalized_request, or fallback to uri/raw_log)
-		texts_to_embed = [
-			record.get("normalized_request") or record.get("uri") or record.get("raw_log") or ""
-			for record in scored_records
-		]
+		# Extract texts to embed, including attack_type prefix to align with seeded attack pattern categories
+		texts_to_embed = []
+		for record in scored_records:
+			category = record.get("attack_type") or record.get("ml_attack_type") or ""
+			if category.lower() in {"unknown", "none", "normal", "benign"}:
+				category = ""
+			req_text = record.get("normalized_request") or record.get("uri") or record.get("raw_log") or ""
+			texts_to_embed.append(f"{category} {req_text}".strip())
 		
 		embeddings = embedding_engine.get_embeddings(texts_to_embed)
 		for record, emb in zip(scored_records, embeddings):
@@ -296,9 +306,6 @@ def _export_to_mongodb(
 
 	except Exception as e:
 		logging.error("[-] Failed to export to MongoDB: %s", e)
-
-
-	return summary
 
 
 def _export_stage_outputs(

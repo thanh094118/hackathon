@@ -105,16 +105,43 @@ def _pick_incident_id(incidents: List[Dict[str, Any]]) -> Optional[str]:
     return selected_id
 
 
+def _matches_filter(row: Dict[str, Any], method_filter: str) -> bool:
+    has_rules = bool(row.get("matched_rule_ids") or row.get("rule_score", 0) > 0)
+    has_ml = bool(row.get("ml_label") == "attack" or row.get("ml_should_alert"))
+    if method_filter == "Rules Only":
+        return has_rules and not has_ml
+    elif method_filter == "ML Only":
+        return has_ml and not has_rules
+    elif method_filter == "Hybrid Only":
+        return has_rules and has_ml
+    return True
+
+
 def render_investigator_tab(query_engine) -> None:
     st.markdown("## Threat Investigator")
     st.caption("Investigate suspicious requests with MongoDB Vector Search")
     st.info("MongoDB Vector Search explains suspicious requests by matching them to known attack patterns.")
+
+    st.sidebar.markdown("### Detection Filters")
+    detection_method = st.sidebar.selectbox(
+        "Detection Method",
+        ["All", "Rules Only", "ML Only", "Hybrid Only"],
+        help="Filter threats based on the detection engine that triggered them."
+    )
 
     incidents = query_engine.get_recent_incidents(limit=100)
     if not incidents:
         render_empty_state(
             "No Incidents",
             "No suspicious or malicious incidents are available right now.",
+        )
+        return
+
+    incidents = [row for row in incidents if _matches_filter(row, detection_method)]
+    if not incidents:
+        render_empty_state(
+            "No Matching Incidents",
+            f"No incidents matched the selected detection filter: '{detection_method}'.",
         )
         return
 

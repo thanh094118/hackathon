@@ -26,7 +26,11 @@ def _malicious_match_query() -> Dict[str, Any]:
     return {
         "$or": [
             {"prediction.label": {"$in": ["malicious", "suspicious", "attack"]}},
+            {"ml_label": {"$in": ["malicious", "suspicious", "attack"]}},
+            {"ml_should_alert": True},
+            {"should_alert": True},
             {"attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
+            {"ml_attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
             {"risk_score": {"$gte": 70}},
         ]
     }
@@ -89,7 +93,7 @@ def explain_threat_via_vector_search(
     limit: int = 3,
     *,
     patterns_collection: str = "attack_patterns",
-    index_name: str = "attack_patterns_vector_index",
+    index_name: str = "vector_index",
     num_candidates: int = 50,
 ) -> List[Dict[str, Any]]:
     collection = _collection(db, patterns_collection)
@@ -116,10 +120,13 @@ def explain_threat_via_vector_search(
                 "_id": 0,
                 "pattern_id": 1,
                 "attack_type": 1,
+                "category": 1,
                 "name": 1,
                 "description": 1,
                 "examples": 1,
+                "payload_example": 1,
                 "remediation": 1,
+                "mitigation": 1,
                 "mitre": 1,
                 "severity": 1,
                 "score": {"$meta": "vectorSearchScore"},
@@ -265,7 +272,7 @@ def get_attack_type_distribution(
         {"$match": _malicious_match_query()},
         {
             "$group": {
-                "_id": {"$ifNull": ["$attack_type", "Unknown"]},
+                "_id": {"$ifNull": ["$attack_type", {"$ifNull": ["$ml_attack_type", "Unknown"]}]},
                 "count": {"$sum": 1},
             }
         },
@@ -293,7 +300,7 @@ def get_top_attacking_ips(
         {"$match": _malicious_match_query()},
         {
             "$group": {
-                "_id": {"$ifNull": ["$ip", "Unknown"]},
+                "_id": {"$ifNull": ["$source_ip", "$ip", "Unknown"]},
                 "total_attacks": {"$sum": 1},
                 "attack_types": {"$addToSet": "$attack_type"},
                 "target_uris": {"$addToSet": "$uri"},
@@ -329,7 +336,7 @@ def detect_attack_campaigns(
         {"$match": _malicious_match_query()},
         {
             "$group": {
-                "_id": {"$ifNull": ["$ip", "Unknown"]},
+                "_id": {"$ifNull": ["$source_ip", "$ip", "Unknown"]},
                 "total_attacks": {"$sum": 1},
                 "attack_types": {"$addToSet": "$attack_type"},
                 "target_uris": {"$addToSet": "$uri"},
@@ -376,7 +383,10 @@ def generate_attack_timeline(
 
     match_query: Dict[str, Any] = dict(_malicious_match_query())
     if ip:
-        match_query["ip"] = str(ip)
+        match_query["$or"] = [
+            {"source_ip": str(ip)},
+            {"ip": str(ip)}
+        ]
 
     bucket_size = max(1, _safe_int(hours_bucket, 1))
     max_limit = max(1, _safe_int(limit, 100))

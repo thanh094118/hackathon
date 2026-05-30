@@ -73,13 +73,29 @@ class MongoDBExporter:
             if not operations:
                 return
 
-            result = self.collection.bulk_write(operations, ordered=False)
+            total_matched = 0
+            total_upserted = 0
+            total_modified = 0
+            chunk_size = 1000
+
+            for i in range(0, len(operations), chunk_size):
+                chunk = operations[i:i + chunk_size]
+                result = self.collection.bulk_write(chunk, ordered=False)
+                if result:
+                    total_matched += getattr(result, "matched_count", 0) or 0
+                    total_upserted += getattr(result, "upserted_count", 0) or 0
+                    total_modified += getattr(result, "modified_count", 0) or 0
+
             logging.info(
                 f"Successfully exported records to MongoDB. "
-                f"Matched: {result.matched_count}, Upserted: {result.upserted_count}, "
-                f"Modified: {result.modified_count}."
+                f"Matched: {total_matched}, Upserted: {total_upserted}, "
+                f"Modified: {total_modified}."
             )
-            return result
+            return {
+                "matched_count": total_matched,
+                "upserted_count": total_upserted,
+                "modified_count": total_modified
+            }
         except BulkWriteError as bwe:
             logging.error(f"Bulk write error: {bwe.details}")
             return bwe.details

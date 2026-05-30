@@ -221,6 +221,11 @@ def _normalize_request_record(record: Mapping[str, Any]) -> Dict[str, Any]:
         "matched_rule_ids": _first_non_empty(record, "matched_rule_ids") or [],
         "matched_rules": _first_non_empty(record, "matched_rules") or [],
         "embedding": _first_non_empty(record, "embedding", "features.embedding") or [],
+        "ml_label": record.get("ml_label"),
+        "ml_should_alert": record.get("ml_should_alert"),
+        "should_alert": record.get("should_alert"),
+        "ml_attack_type": record.get("ml_attack_type"),
+        "rule_score": record.get("rule_score"),
     }
 
     if not isinstance(normalized["matched_rule_ids"], list):
@@ -390,13 +395,13 @@ class DashboardQueryAdapter:
             records = self._find_many(
                 self.requests_collection_name,
                 self._malicious_match_query(),
-                projection={"attack_type": 1, "prediction.attack_type": 1, "risk_score": 1, "prediction.label": 1},
+                projection={"attack_type": 1, "ml_attack_type": 1, "prediction.attack_type": 1, "risk_score": 1, "prediction.label": 1, "ml_label": 1, "ml_should_alert": 1, "should_alert": 1},
                 limit=20000,
                 sort=None,
             )
             counts: Dict[str, int] = {}
             for record in records:
-                attack_type = _normalize_attack_type(_first_non_empty(record, "attack_type", "prediction.attack_type"))
+                attack_type = _normalize_attack_type(_first_non_empty(record, "attack_type", "prediction.attack_type", "ml_attack_type"))
                 counts[attack_type] = counts.get(attack_type, 0) + 1
             rows = [{"attack_type": attack_type, "count": count} for attack_type, count in counts.items()]
 
@@ -453,7 +458,7 @@ class DashboardQueryAdapter:
             records = self._find_many(
                 self.requests_collection_name,
                 self._malicious_match_query(),
-                projection={"ip": 1, "attack_type": 1, "uri": 1, "timestamp": 1, "risk_score": 1, "prediction": 1},
+                projection={"ip": 1, "source_ip": 1, "client_ip": 1, "attack_type": 1, "ml_attack_type": 1, "uri": 1, "timestamp": 1, "risk_score": 1, "prediction": 1, "ml_label": 1, "ml_should_alert": 1, "should_alert": 1},
                 limit=20000,
                 sort=[("timestamp", -1)],
             )
@@ -697,10 +702,13 @@ class DashboardQueryAdapter:
             projection={
                 "pattern_id": 1,
                 "attack_type": 1,
+                "category": 1,
                 "name": 1,
                 "description": 1,
                 "examples": 1,
+                "payload_example": 1,
                 "remediation": 1,
+                "mitigation": 1,
                 "mitre": 1,
                 "severity": 1,
             },
@@ -1023,7 +1031,11 @@ class DashboardQueryAdapter:
         return {
             "$or": [
                 {"prediction.label": {"$in": ["malicious", "suspicious", "attack"]}},
-                {"attack_type": {"$exists": True, "$ne": None}},
+                {"ml_label": {"$in": ["malicious", "suspicious", "attack"]}},
+                {"ml_should_alert": True},
+                {"should_alert": True},
+                {"attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
+                {"ml_attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
                 {"risk_score": {"$gte": 70}},
             ]
         }
@@ -1081,13 +1093,17 @@ class DashboardQueryAdapter:
 
     def _normalize_pattern(self, row: Mapping[str, Any]) -> Dict[str, Any]:
         score = _safe_number(row.get("score"), 0.0)
+        raw_examples = row.get("examples") or row.get("payload_example") or []
+        examples = [raw_examples] if isinstance(raw_examples, str) else list(raw_examples) if isinstance(raw_examples, (list, set, tuple)) else []
+        raw_remediation = row.get("remediation") or row.get("mitigation") or []
+        remediation = [raw_remediation] if isinstance(raw_remediation, str) else list(raw_remediation) if isinstance(raw_remediation, (list, set, tuple)) else []
         return {
             "pattern_id": str(row.get("pattern_id") or row.get("_id") or ""),
-            "attack_type": _normalize_attack_type(row.get("attack_type")),
+            "attack_type": _normalize_attack_type(_first_non_empty(row, "attack_type", "category")),
             "name": str(row.get("name") or row.get("pattern_id") or "Unknown Pattern"),
             "description": str(row.get("description") or "No pattern description available."),
-            "examples": row.get("examples") if isinstance(row.get("examples"), list) else [],
-            "remediation": row.get("remediation") if isinstance(row.get("remediation"), list) else [],
+            "examples": examples,
+            "remediation": remediation,
             "mitre": str(row.get("mitre") or "N/A"),
             "severity": str(row.get("severity") or "unknown"),
             "score": max(0.0, min(score, 1.0 if score <= 1.0 else score)),

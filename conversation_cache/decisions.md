@@ -13,7 +13,8 @@
 - Keep graceful degradation:
   - mock mode remains first-class (`DASHBOARD_USE_MOCK=1`)
   - missing MongoDB / missing vector index / helper failures must return safe empty-or-fallback data instead of crashing UI.
-
+- Bulk Upsert Command Size Mitigation:
+  - Operations to MongoDB collections inside the exporter must be chunked (e.g. `chunk_size = 1000`) rather than sent in a single massive list. This prevents network socket drops, proxy resets, and payload limits (like MongoDB's 16MB limit).
 - Keep this branch as Issue 3 frontend/dashboard-only; exclude backend, ML, data, infra, and unrelated test changes.
 - Never track local `.env` in Git; enforce ignore rules with:
   - `.env`
@@ -22,3 +23,6 @@
 - Keep `.env.example` as placeholder-only template for dashboard setup.
 - Preserve generated artifact hygiene by ignoring `__pycache__/` and `*.pyc`.
 - Reset AGENTS guidance to non-ML core pipeline baseline and keep dashboard work isolated from runtime core flow changes.
+- Mandatory sentence-transformers: enforce hard requirement for sentence-transformers and remove the fallback hashing trick.
+- Robust IP Aggregation: aggregation queries grouping or matching on IP addresses must support both `$source_ip` and `$ip` using `$ifNull` array logic or `$or` matching to remain backward-compatible with normalized fields (`source_ip`) and fallback schemas.
+

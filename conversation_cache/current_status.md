@@ -1,34 +1,28 @@
 # Current Status (2026-05-30)
 
-- **Merge Conflict Resolution**:
-  - Successfully pulled and resolved merge conflicts with `origin/main`.
-  - Reconciled changes in `src/exporters/mongodb_exporter.py` by keeping the bulk upsert and `certifi` logic from HEAD.
-  - Reconciled changes in `src/features/embedding_engine.py` by creating a hybrid implementation that uses `SentenceTransformer` if installed, and falls back to a deterministic hashing trick otherwise.
-  - Reconciled changes in `src/scoring/mongodb_queries.py` by combining both backend/ML threat detection queries (vector search, aggregations) and dashboard analytics/correlation queries.
-  - Cleaned up out-of-scope files (`a.puml` and compiled pycache files `.pyc` committed in `origin/main`) by removing them.
-  - Successfully merged and committed the result.
+- **MongoDB Exporter Chunking**:
+  - Implemented command chunking in `src/exporters/mongodb_exporter.py` with `chunk_size = 1000`.
+  - This successfully prevents TCP socket timeouts and connection closed errors on large bulk writes.
 
-- Dashboard integration with Issue 2.3 query library is now implemented:
-  - Added centralized query module: `src/scoring/mongodb_queries.py`.
-  - `src/dashboard/query_adapter.py` now delegates complex MongoDB logic to centralized functions:
-    - `explain_threat_via_vector_search`
-    - `detect_attack_campaigns`
-    - `generate_attack_timeline`
-    - `get_attack_type_distribution`
-    - `get_top_attacking_ips`
-  - UI files remain free of raw MongoDB aggregation/vector-search logic.
-- Verification for integration run:
-  - `pytest -q tests` => 198 passed (including all 7 MongoDB integration tests in `tests/test_mongodb_integration.py` and 4 pipeline tests in `tests/test_pipeline.py`)
-  - `python -m compileall src` => success
-  - `DASHBOARD_USE_MOCK=1 ... DashboardQueryAdapter ...` => mock mode works and returns safe data
-- Secret handling:
-  - `.env` was removed from Git index and is now ignored by `.gitignore`.
-  - `.env.example` is sanitized and contains placeholders only.
-  - Credentials that were previously exposed in local/staged state must be rotated by project owners.
-- Current intended change scope is limited to:
-  - `src/dashboard/*`
-  - `.env.example`
-  - `requirements.txt`
-  - `.gitignore`
-  - `AGENTS.md`
-  - `conversation_cache/*`
+- **Mandatory sentence-transformers**:
+  - Made `sentence-transformers` a hard requirement in `src/features/embedding_engine.py` and removed the fallback hashing logic.
+
+- **Real Log Ingestion**:
+  - Ingested 8,000 log records from the real `converted_data_capec_multilabel_part001_copy_sample.log` dataset containing live SQLi and XSS attacks.
+  - Successfully seeded 16 attack patterns and stored 8,000 scored logs, 2,730 incidents, and 1 pipeline run summary in MongoDB Atlas.
+
+- **Dashboard Verification**:
+  - Successfully started the Streamlit dashboard on local port `8501`.
+  - Verified the MongoDB Atlas connection status is green (**Connected**).
+  - Verified the **SOC Overview** tab exhibits correct live statistics from the 8,000 ingested records.
+  - Verified the **Threat Investigator** tab displays real incidents and performs Atlas Vector Search successfully against the seeded attack patterns.
+
+- **Top Attacking IPs Fix**:
+  - Fixed schema mismatch in `src/scoring/mongodb_queries.py` (`get_top_attacking_ips`, `detect_attack_campaigns`, and `generate_attack_timeline`) where IP groupings were referencing `$ip` instead of `$source_ip` from the normalized log schema.
+  - Configured a multi-field `$ifNull` fallback checking `["$source_ip", "$ip", "Unknown"]` to ensure compatibility across schemas.
+  - Verified that the SOC Dashboard now correctly aggregates and displays the attacker IP address `172.26.0.1` and other source IPs instead of "Unknown".
+
+- **Sidebar Detection Filter & Vector Search Fixes**:
+  - Implemented a **Detection Method** filter in the Threat Investigator sidebar allowing the user to select: All, Rules Only, ML Only, or Hybrid Only. This dynamically filters matching incidents in the Threat Explorer.
+  - Upgraded pattern normalization in `_normalize_pattern` in `src/dashboard/query_adapter.py` to correctly map database-specific seeded fields (`category`, `payload_example`, `mitigation`) to the dashboard expectations (`attack_type`, `examples`, `remediation`).
+  - Verified that Vector Search Match Cards now display actual threat categories (e.g. `Type: scanner` or `Type: sqli`) and valid MITRE references (e.g. `MITRE: T1595 | T1505`) instead of displaying "Unknown" or "N/A".

