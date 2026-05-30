@@ -129,20 +129,18 @@ def render_investigator_tab(query_engine) -> None:
         help="Filter threats based on the detection engine that triggered them."
     )
 
-    incidents = query_engine.get_recent_incidents(limit=100)
+    incidents = query_engine.get_recent_incidents(limit=100, method_filter=detection_method)
     if not incidents:
-        render_empty_state(
-            "No Incidents",
-            "No suspicious or malicious incidents are available right now.",
-        )
-        return
-
-    incidents = [row for row in incidents if _matches_filter(row, detection_method)]
-    if not incidents:
-        render_empty_state(
-            "No Matching Incidents",
-            f"No incidents matched the selected detection filter: '{detection_method}'.",
-        )
+        if detection_method == "All":
+            render_empty_state(
+                "No Incidents",
+                "No suspicious or malicious incidents are available right now.",
+            )
+        else:
+            render_empty_state(
+                "No Matching Incidents",
+                f"No incidents matched the selected detection filter: '{detection_method}'.",
+            )
         return
 
     selected_id = _pick_incident_id(incidents)

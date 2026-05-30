@@ -151,6 +151,10 @@ def _extract_prediction_score(record: Mapping[str, Any]) -> float:
         "score",
     )
     if value is None:
+        # Fallback: derive from risk_score (0-100) when ML fields are absent
+        risk = _first_non_empty(record, "risk_score", "rule_score")
+        if risk is not None:
+            return max(0.0, min(_safe_number(risk) / 100.0, 1.0))
         return 0.0
     score = _safe_number(value)
     if score > 1.0:
@@ -618,7 +622,7 @@ class DashboardQueryAdapter:
     # Investigation tab query methods
     # -----------------------------
 
-    def get_recent_incidents(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_recent_incidents(self, limit: int = 100, method_filter: str = "All") -> List[Dict[str, Any]]:
         limit = max(1, int(limit))
 
         if self.is_mock_mode():
@@ -626,12 +630,45 @@ class DashboardQueryAdapter:
                 _normalize_request_record(record)
                 for record in self._mock["incidents"]
             ]
+            if method_filter != "All":
+                filtered = []
+                for row in rows:
+                    has_rules = bool(row.get("matched_rule_ids") or row.get("rule_score", 0) > 0)
+                    has_ml = bool(row.get("ml_label") == "attack" or row.get("ml_should_alert"))
+                    if method_filter == "Rules Only" and has_rules and not has_ml:
+                        filtered.append(row)
+                    elif method_filter == "ML Only" and has_ml and not has_rules:
+                        filtered.append(row)
+                    elif method_filter == "Hybrid Only" and has_rules and has_ml:
+                        filtered.append(row)
+                rows = filtered
             rows.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
             return rows[:limit]
 
+        query: Dict[str, Any] = {}
+        if method_filter != "All":
+            has_rules_cond = {
+                "$or": [
+                    {"matched_rule_ids.0": {"$exists": True}},
+                    {"rule_score": {"$gt": 0}}
+                ]
+            }
+            has_ml_cond = {
+                "$or": [
+                    {"ml_label": "attack"},
+                    {"ml_should_alert": True}
+                ]
+            }
+            if method_filter == "Rules Only":
+                query = {"$and": [has_rules_cond, {"$nor": [has_ml_cond]}]}
+            elif method_filter == "ML Only":
+                query = {"$and": [has_ml_cond, {"$nor": [has_rules_cond]}]}
+            elif method_filter == "Hybrid Only":
+                query = {"$and": [has_rules_cond, has_ml_cond]}
+
         incident_records = self._find_many(
             self.incidents_collection_name,
-            {},
+            query,
             projection=None,
             limit=limit,
             sort=[("timestamp", -1)],
@@ -643,9 +680,13 @@ class DashboardQueryAdapter:
                 for record in incident_records
             ]
 
+        derived_query = self._malicious_match_query()
+        if query:
+            derived_query = {"$and": [derived_query, query]}
+
         derived = self._find_many(
             self.requests_collection_name,
-            self._malicious_match_query(),
+            derived_query,
             projection=None,
             limit=limit,
             sort=[("timestamp", -1)],
