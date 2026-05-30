@@ -32,3 +32,6 @@
   - **Real-time Blast Radius**: Implemented `get_ip_blast_radius` aggregation to calculate the distribution and percentage of target URIs hit by any given attacker IP. Exposed this interactively in the "Top Attacking IPs" section via a dropdown that triggers a Plotly donut chart visualization.
   - **Time-series Attack Evolution**: Redesigned `generate_attack_timeline` to support grouping by both truncated timestamp (`$dateTrunc` by minute/hour/day) and normalized attack type. Replaced the simple line chart with a Plotly stacked bar chart on the dashboard to visualize how attacker methods shift over time (e.g., from scanning to SQL injection).
   - **Unit Test Coverage**: Wrote comprehensive unit tests in both `tests/test_mongodb_integration.py` and `tests/test_dashboard_query_adapter.py` covering both mock mode and live/patched pipeline aggregation queries. Verified all tests pass.
+
+- **ThreatLens AI Ultimate Next.js Frontend Specification**:
+  - Generated `threatlens_ai_ultimate_frontend_spec.md` with complete layouts, Tailwind styles, interactive Recharts configurations, data schemas, API routes, and TSX component implementations matching the user's cyberpunk design assets.

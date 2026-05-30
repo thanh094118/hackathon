@@ -27,4 +27,5 @@
   - [x] Render Attack Evolution Timeline as Plotly stacked bar chart.
   - [x] Write unit tests in test_mongodb_integration.py and test_dashboard_query_adapter.py.
   - [x] Verify all test suites pass.
+- [x] Generate the ultimate Next.js frontend specification (`threatlens_ai_ultimate_frontend_spec.md`) integrating visual screen mockups and MongoDB aggregation schemas.
 

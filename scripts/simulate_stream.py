@@ -263,10 +263,7 @@ class Consumer(threading.Thread):
         if not log_lines:
             return {"counts": {"raw_lines": 0, "alerts": 0}}
 
-        # Write temp file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False, encoding="utf-8") as tmp:
-            tmp.write("\n".join(log_lines) + "\n")
-            tmp_path = Path(tmp.name)
+
 
         # Output dir for this batch (only used when debug_local=True)
         output_dir = TEMP_DIR / f"batch_{self.batch_count:06d}_out"
