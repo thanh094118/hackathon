@@ -79,3 +79,11 @@ Decision: Defer Phase 2 ML work until explicitly requested.
 Reason: Current priority is Phase 1 stability, validation, schema consistency, and rule-based baseline quality.
 
 Tradeoffs / impact: ML capabilities are intentionally unavailable in current scope.
+
+## 2026-05-30 - Route CAPEC CSV Through Existing Pipeline
+
+Decision: Treat CAPEC-style labeled CSV files as source inputs that are converted into raw access-log lines before the standard Phase 1 pipeline runs.
+
+Reason: Preserves the existing parse/normalize/detect/export schema while allowing the labeled dataset to be used without introducing a new output contract.
+
+Tradeoffs / impact: Adds a conversion step for CSV sources, but keeps the downstream pipeline and artifact naming consistent with existing access-log inputs.

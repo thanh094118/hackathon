@@ -20,6 +20,12 @@ In Phase 1, datasets are used to validate:
 - export artifacts (JSONL/CSV)
 - reporting outputs (`report.md`, `run_summary.json`)
 
+## CSV Input Routing
+
+- CAPEC-style labeled CSV datasets can now be used as CLI inputs.
+- The CSV is converted into the existing raw access-log shape before the standard Phase 1 pipeline runs.
+- Downstream artifacts keep the same schema and naming contract as regular access-log inputs.
+
 ## Rules Dataset
 
 - Current rule path: `configs/rules.yaml`

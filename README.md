@@ -106,6 +106,11 @@ Chạy phân tích một file log cụ thể:
 python -m src.main --input data/raw/apache/access.log --server-type apache --output-dir outputs/my_run
 ```
 
+Chạy full pipeline trực tiếp từ file CSV CAPEC để sinh các bước `normalize`, `preprocess`, `detect`, `features`, `report` trong `outputs/`:
+```bash
+python -m src.main --input data/input/data_capec_multilabel.csv --output-dir outputs/capec_run --rules src/rules/attack_patterns.yaml
+```
+
 **Các tham số chính:**
 *   `--input`: Đường dẫn tới file log cần phân tích.
 *   `--server-type`: Loại máy chủ (`apache`, `nginx`, `iis`).
@@ -117,6 +122,8 @@ python -m src.main --input data/raw/apache/access.log --server-type apache --out
 ```bash
 python convert.py --input <input_file>
 ```
+
+Lưu ý: `convert.py` chỉ dừng ở bước chuyển đổi. Nếu bạn muốn xuất đủ các thư mục như `normalizer_results/`, `preprocessor_results/`, `detector_results/`, `feature_results/`, `report/` thì hãy chạy `python -m src.main ...` như ở trên.
 
 ---
 

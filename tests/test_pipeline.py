@@ -101,3 +101,48 @@ def test_pipeline_cli_accepts_folder_input(tmp_path: Path):
 
     summary_files = list(output_dir.rglob("*_run_summary.json"))
     assert summary_files, "Expected at least one run summary file in batch output"
+
+
+def test_pipeline_cli_accepts_capec_csv_input(tmp_path: Path):
+    input_csv = tmp_path / "data_capec_multilabel.csv"
+    input_csv.write_text(
+        "timestamp,src_ip,src_port,dst_ip,dst_port,request_http_method,request_http_request,request_http_protocol,request_user_agent,request_referer,request_host,request_origin,request_cookie,request_content_type,request_accept,request_accept_language,request_accept_encoding,request_do_not_track,request_connection,request_body,response_http_protocol,response_http_status_code,response_http_status_message,response_content_length,000 - Normal,272 - Protocol Manipulation,242 - Code Injection,88 - OS Command Injection,126 - Path Traversal,66 - SQL Injection,16 - Dictionary-based Password Attack,310 - Scanning for Vulnerable Software,153 - Input Data Manipulation,248 - Command Injection,274 - HTTP Verb Tampering,194 - Fake the Source of Data,34 - HTTP Response Splitting,33 - HTTP Request Smuggling\n"
+        "17/Jul/2020:12:23:34 +0100,172.26.0.1,55894,172.26.0.4,80,GET,/,HTTP/1.1,Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.130 Safari/537.36,,test-site.com,,,,*/*,,\"gzip, deflate\",,keep-alive,,HTTP/1.1,200,OK,25174,1,0,0,0,0,0,0,0,0,0,0,0,0,0\n",
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "capec_outputs"
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "src.main",
+            "--input",
+            str(input_csv),
+            "--output-dir",
+            str(output_dir),
+            "--rules",
+            "src/rules/attack_patterns.yaml",
+        ],
+        check=True,
+    )
+
+    expected_files = [
+        "collector_results/apache_data_capec_multilabel_raw_lines.jsonl",
+        "parser_results/apache_data_capec_multilabel_parsed_logs.jsonl",
+        "normalizer_results/apache_data_capec_multilabel_normalized_logs.jsonl",
+        "normalizer_results/apache_data_capec_multilabel_normalized_logs.csv",
+        "preprocessor_results/apache_data_capec_multilabel_preprocessed_requests.jsonl",
+        "feature_results/apache_data_capec_multilabel_features.csv",
+        "detector_results/apache_data_capec_multilabel_alerts.jsonl",
+        "detector_results/apache_data_capec_multilabel_alerts.csv",
+        "report/apache_data_capec_multilabel_report.md",
+        "report/apache_data_capec_multilabel_run_summary.json",
+    ]
+    for file_name in expected_files:
+        assert (output_dir / file_name).exists(), file_name
+
+    summary = json.loads((output_dir / "report/apache_data_capec_multilabel_run_summary.json").read_text(encoding="utf-8"))
+    assert summary["counts"]["raw_lines"] == 1
+    assert summary["counts"]["parsed_logs"] == 1
+    assert summary["server_type"] == "apache"

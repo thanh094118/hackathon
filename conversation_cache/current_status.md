@@ -20,6 +20,9 @@ Maintain and harden the already-implemented Phase 1 non-ML pipeline; do not rebu
   - `alerts.csv`
   - `report.md`
   - `run_summary.json`
+- CSV input routing update completed:
+  - CAPEC-style `.csv` inputs are converted through the existing converter first, then processed by the same parser/normalizer/detector/export pipeline.
+  - Output schema remains unchanged and still uses the existing server-type prefixing convention.
 - Parser hardening update completed:
   - Apache parser now requires full-line match (rejects trailing unexpected fields).
   - Nginx parser now supports two profiles:
@@ -43,10 +46,13 @@ Focus on validation, hardening, real-log testing, schema stability, rule expansi
 ## Files Modified
 
 - `src/main.py`
+- `src/converter/convert_flow.py`
 - `conversation_cache/current_status.md`
 - `conversation_cache/known_issues.md`
 
 ## Checks Run / Skipped
 
 - Ran: `pytest --ignore=tests/test_ai_inference_pipeline.py -q` (passed: 216 tests)
+- Ran: `pytest -q tests/test_pipeline.py` (passed: 3 tests)
+- Ran: `pytest -q` (blocked by pre-existing `tests/test_ai_inference_pipeline.py` collection error)
 - ML implementation remains deferred to Phase 2 unless explicitly requested.
