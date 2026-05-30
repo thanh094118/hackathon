@@ -9,6 +9,8 @@ class ReportGenerator:
         now = datetime.now(timezone.utc).isoformat()
         counts = summary.get("counts", {})
         labels = summary.get("labels", {})
+        collector = summary.get("collector", {})
+        ml_summary = summary.get("ml", {})
 
         lines = [
             "# Web Attack Detection Report",
@@ -28,6 +30,19 @@ class ReportGenerator:
             f"- Preprocessed requests: **{counts.get('preprocessed_requests', 0)}**",
             f"- Scored records: **{counts.get('scored_records', 0)}**",
             f"- Alerts: **{counts.get('alerts', 0)}**",
+            "",
+            "## Collector Summary",
+            "",
+            f"- Decode error records: **{collector.get('decode_error_records', 0)}**",
+            f"- BOM records: **{collector.get('had_bom_records', 0)}**",
+            f"- Continuation merged records: **{collector.get('continuation_merged_records', 0)}**",
+            "",
+            "## ML Summary",
+            "",
+            f"- Enabled: **{bool(ml_summary.get('enabled', False))}**",
+            f"- ML predictions: **{ml_summary.get('prediction_count', 0)}**",
+            f"- ML benign: **{ml_summary.get('labels', {}).get('benign', 0)}**",
+            f"- ML attack: **{ml_summary.get('labels', {}).get('attack', 0)}**",
             "",
             "## Label Distribution",
             "",
@@ -55,6 +70,19 @@ class ReportGenerator:
             lines.append(f"- `{rule_id}`: **{count}**")
         if not summary.get("top_matched_rule_ids"):
             lines.append("- None")
+
+        if ml_summary.get("enabled"):
+            lines.extend(
+                [
+                    "",
+                    "## ML Top Attack Types",
+                    "",
+                ]
+            )
+            for attack_type, count in ml_summary.get("top_attack_types", []):
+                lines.append(f"- `{attack_type}`: **{count}**")
+            if not ml_summary.get("top_attack_types"):
+                lines.append("- None")
 
         lines.extend(
             [
