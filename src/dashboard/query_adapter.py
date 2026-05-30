@@ -812,6 +812,59 @@ class DashboardQueryAdapter:
 
         return _build_default_response_by_attack_type(str(incident.get("attack_type", "unknown")))
 
+    def find_similar_requests(self, request_embedding: List[float], limit: int = 5) -> List[Dict[str, Any]]:
+        """Find historically similar log entries using MongoDB Vector Search ($vectorSearch).
+
+        Delegates to ``find_similar_logs`` in ``mongodb_queries``, which issues a
+        ``$vectorSearch`` aggregation against the requests/unified_logs collection.
+        Returns ``[]`` when the DB is unavailable or the search returns no results.
+        """
+        limit = max(1, int(limit))
+        embedding = [] if request_embedding is None else [float(x) for x in request_embedding if isinstance(x, (int, float))]
+
+        if not embedding:
+            return []
+
+        if self.db is None or mongodb_queries is None:
+            return []
+
+        if not hasattr(mongodb_queries, "find_similar_logs"):
+            return []
+
+        # Prefer requests collection, fallback to unified_logs.
+        for collection_name in (self.requests_collection_name, "unified_logs"):
+            if not collection_name:
+                continue
+            try:
+                col = self._collection(collection_name)
+                if col is None:
+                    continue
+                rows = mongodb_queries.find_similar_logs(col, embedding, limit=limit)
+                if rows:
+                    return [self._normalize_similar_request(row) for row in rows]
+            except Exception:
+                continue
+
+        return []
+
+
+    @staticmethod
+    def _normalize_similar_request(row: Mapping[str, Any]) -> Dict[str, Any]:
+        """Normalize a raw similar-log result row returned by find_similar_logs."""
+        score = _safe_number(row.get("score"), 0.0)
+        # Scores from $vectorSearch are cosine similarities in [0, 1].
+        similarity_score = max(0.0, min(1.0, score))
+        return {
+            "event_id": str(row.get("event_id") or ""),
+            "timestamp": _timestamp_to_text(_first_non_empty(row, "timestamp", "time", "@timestamp")),
+            "ip": str(_first_non_empty(row, "source_ip", "ip", "client_ip") or "Unknown"),
+            "uri": str(_first_non_empty(row, "uri", "original_url", "url") or "-"),
+            "risk_score": _safe_int(_first_non_empty(row, "risk_score", "rule_score"), 0),
+            "risk_level": str(row.get("risk_level") or ""),
+            "final_label": str(row.get("final_label") or ""),
+            "similarity_score": round(similarity_score, 4),
+        }
+
     # -------------
     # Internals
     # -------------
