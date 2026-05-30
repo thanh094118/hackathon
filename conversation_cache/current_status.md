@@ -1,5 +1,13 @@
 # Current Status (2026-05-30)
 
+- **Merge Conflict Resolution**:
+  - Successfully pulled and resolved merge conflicts with `origin/main`.
+  - Reconciled changes in `src/exporters/mongodb_exporter.py` by keeping the bulk upsert and `certifi` logic from HEAD.
+  - Reconciled changes in `src/features/embedding_engine.py` by creating a hybrid implementation that uses `SentenceTransformer` if installed, and falls back to a deterministic hashing trick otherwise.
+  - Reconciled changes in `src/scoring/mongodb_queries.py` by combining both backend/ML threat detection queries (vector search, aggregations) and dashboard analytics/correlation queries.
+  - Cleaned up out-of-scope files (`a.puml` and compiled pycache files `.pyc` committed in `origin/main`) by removing them.
+  - Successfully merged and committed the result.
+
 - Dashboard integration with Issue 2.3 query library is now implemented:
   - Added centralized query module: `src/scoring/mongodb_queries.py`.
   - `src/dashboard/query_adapter.py` now delegates complex MongoDB logic to centralized functions:
@@ -10,23 +18,13 @@
     - `get_top_attacking_ips`
   - UI files remain free of raw MongoDB aggregation/vector-search logic.
 - Verification for integration run:
-  - `pytest -q tests/test_dashboard_query_adapter.py` => `5 passed`
+  - `pytest -q tests` => 198 passed (including all 7 MongoDB integration tests in `tests/test_mongodb_integration.py` and 4 pipeline tests in `tests/test_pipeline.py`)
   - `python -m compileall src` => success
-  - `python -c "from src.dashboard.app import main; ..."` (system python) => fails (`streamlit` missing)
-  - `/home/thanh/miniconda3/envs/easymocap/bin/python -c "from src.dashboard.app import main; ..."` => success
   - `DASHBOARD_USE_MOCK=1 ... DashboardQueryAdapter ...` => mock mode works and returns safe data
-- Repository currently still contains many pre-existing out-of-scope staged/modified files (backend/ML/data/infra), and `.env` is still present in staged state (`AD`) in this working tree snapshot.
-
-- Pulled updates were cleaned into an Issue 3 dashboard-only working set.
-- Backup artifacts were created before cleanup:
-  - `/tmp/issue3_cleanup_backup/unstaged_before_cleanup.patch`
-  - `/tmp/issue3_cleanup_backup/staged_before_cleanup.patch`
-  - `/tmp/issue3_cleanup_backup/status_before_cleanup.txt`
 - Secret handling:
   - `.env` was removed from Git index and is now ignored by `.gitignore`.
   - `.env.example` is sanitized and contains placeholders only.
   - Credentials that were previously exposed in local/staged state must be rotated by project owners.
-- Out-of-scope backend/ML/data/test artifacts from the pull were removed from the Issue 3 diff.
 - Current intended change scope is limited to:
   - `src/dashboard/*`
   - `.env.example`
@@ -34,7 +32,3 @@
   - `.gitignore`
   - `AGENTS.md`
   - `conversation_cache/*`
-- Verification executed during cleanup:
-  - `git status --short`
-  - `git diff --name-only`
-  - `git diff --cached --name-only`
