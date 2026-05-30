@@ -365,10 +365,10 @@ def _load_raw_records(input_path: Path, server_type: str) -> List[Dict[str, Any]
 
 	collector = FileCollector(str(input_path))
 	records = collector.read_records()
-	for record in records:
+	for idx, record in enumerate(records, start=1):
 		line = str(record.get("line", ""))
 		record["raw_log"] = line
-		record["event_id"] = _build_event_id(server_type, int(record.get("physical_line_start", 1)), line)
+		record["event_id"] = _build_event_id(server_type, idx, line)
 	return records
 
 
