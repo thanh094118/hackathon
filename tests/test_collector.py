@@ -36,11 +36,11 @@ def test_read_flow_handles_utf8_bom_only_on_first_line(tmp_path: Path):
 
     assert len(records) == 2
     assert records[0]["line"].startswith("127.0.0.1")
-    assert records[0]["had_bom"] is True
+    assert "had_utf8_bom" in records[0]["flags"]
 
     # BOM ở dòng 2 không bị strip vì không phải BOM đầu file.
     assert records[1]["line"].startswith("\ufeff10.0.0.2")
-    assert records[1]["had_bom"] is False
+    assert "had_utf8_bom" not in records[1]["flags"]
 
 
 def test_read_flow_normalizes_lf_crlf_and_cr_line_endings(tmp_path: Path):
@@ -61,6 +61,27 @@ def test_read_flow_normalizes_lf_crlf_and_cr_line_endings(tmp_path: Path):
     assert len(lines) == 3
     assert all(not line.endswith("\n") for line in lines)
     assert all(not line.endswith("\r") for line in lines)
+
+
+def test_read_flow_splits_cr_only_physical_lines(tmp_path: Path):
+    """
+    Test:
+    - File sử dụng CR-only giữa các dòng vật lý (legacy style).
+    - Reader phải tách được thành nhiều logical line thay vì gom thành một dòng.
+    """
+    log_path = tmp_path / "access.log"
+    log_path.write_bytes(
+        b"127.0.0.1 - - [date] \"GET /a HTTP/1.1\" 200 1 \"-\" \"ua\"\r"
+        b"127.0.0.2 - - [date] \"GET /b HTTP/1.1\" 200 2 \"-\" \"ua2\"\r"
+        b"127.0.0.3 - - [date] \"GET /c HTTP/1.1\" 200 3 \"-\" \"ua3\""
+    )
+
+    lines = FileCollector(str(log_path)).read_all()
+
+    assert len(lines) == 3
+    assert lines[0].startswith("127.0.0.1")
+    assert lines[1].startswith("127.0.0.2")
+    assert lines[2].startswith("127.0.0.3")
 
 
 def test_read_flow_skips_empty_and_whitespace_only_lines(tmp_path: Path):
@@ -107,9 +128,8 @@ def test_read_flow_merges_space_and_tab_continuation_lines(tmp_path: Path):
         "\\n  continued payload"
         "\\n\tcontinued tab payload"
     )
-    assert records[0]["was_continuation_merged"] is True
-    assert records[0]["physical_line_start"] == 1
-    assert records[0]["physical_line_end"] == 3
+    assert "continuation_merged" in records[0]["flags"]
+    assert records[0]["physical_line_range"] == [1, 3]
 
 
 def test_read_flow_does_not_merge_non_indented_injection_like_lines(tmp_path: Path):
@@ -161,6 +181,11 @@ def test_read_flow_latin1_fallback_does_not_crash(tmp_path: Path):
     Test:
     - Một dòng có byte không decode được bằng UTF-8.
     - Collector phải fallback sang latin-1 thay vì crash.
+    - Record phải có flag decode fallback latin-1.
+
+    Ý nghĩa:
+    - File access.log thực tế có thể chứa byte bẩn.
+    - Pipeline không nên chết ở Collector.
     """
     log_path = tmp_path / "access.log"
     log_path.write_bytes(
@@ -171,18 +196,20 @@ def test_read_flow_latin1_fallback_does_not_crash(tmp_path: Path):
     records = FileCollector(str(log_path)).read_records()
 
     assert len(records) == 2
-    assert records[0]["encoding_used"] == "utf-8"
-    assert records[0]["decode_error"] is False
-    assert records[1]["encoding_used"] == "latin-1"
-    assert records[1]["decode_error"] is True
+    assert "decode_fallback_latin1" not in records[0]["flags"]
+    assert "decode_fallback_latin1" in records[1]["flags"]
     assert "ÿ" in records[1]["line"]
 
 
-def test_read_flow_continuation_can_upgrade_record_encoding_to_latin1(tmp_path: Path):
+def test_read_flow_continuation_propagates_decode_fallback_flag(tmp_path: Path):
     """
     Test:
     - Dòng chính decode được UTF-8.
     - Dòng continuation chứa byte bẩn phải fallback latin-1.
+    - Dòng continuation chứa byte bẩn thì logical record phải có flag decode fallback.
+
+    Ý nghĩa:
+    - Metadata phải phản ánh toàn bộ logical record.
     """
     log_path = tmp_path / "access.log"
     log_path.write_bytes(
@@ -193,9 +220,8 @@ def test_read_flow_continuation_can_upgrade_record_encoding_to_latin1(tmp_path: 
     records = FileCollector(str(log_path)).read_records()
 
     assert len(records) == 1
-    assert records[0]["encoding_used"] == "latin-1"
-    assert records[0]["decode_error"] is True
-    assert records[0]["was_continuation_merged"] is True
+    assert "decode_fallback_latin1" in records[0]["flags"]
+    assert "continuation_merged" in records[0]["flags"]
 
 
 def test_read_flow_validate_missing_file_raises(tmp_path: Path):
@@ -368,7 +394,6 @@ def test_backward_compatible_collect_access_logs_to_txt_returns_path_pairs(tmp_p
     assert input_path == log_path
     assert output_path.exists()
     assert output_path.read_bytes() == b"x\n"
-
 
 def test_access_log_read_flow_internal_continuation_rule_is_indent_only():
     assert AccessLogReadFlow._is_continuation_line(" continuation") is True

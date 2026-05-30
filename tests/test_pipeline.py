@@ -60,12 +60,12 @@ def test_pipeline_cli_generates_expected_outputs(tmp_path: Path):
         if line.strip()
     ]
     assert raw_rows
-    assert all("encoding_used" in row for row in raw_rows)
-    assert all("decode_error" in row for row in raw_rows)
-    assert all("had_bom" in row for row in raw_rows)
-    assert all("was_continuation_merged" in row for row in raw_rows)
-    assert all("physical_line_start" in row for row in raw_rows)
-    assert all("physical_line_end" in row for row in raw_rows)
+    assert all("flags" in row for row in raw_rows)
+    assert all(isinstance(row["flags"], list) for row in raw_rows)
+    assert all("physical_line_range" in row for row in raw_rows)
+    assert all(isinstance(row["physical_line_range"], list) and len(row["physical_line_range"]) == 2 for row in raw_rows)
+    assert all("parse_error" not in row for row in raw_rows)
+    assert all("error_message" not in row for row in raw_rows)
     assert [row["event_id"] for row in raw_rows] == [row["event_id"] for row in parsed]
 
     summary = json.loads((output_dir / "report/apache_access_run_summary.json").read_text(encoding="utf-8"))

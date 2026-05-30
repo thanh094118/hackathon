@@ -1,6 +1,6 @@
 @startuml
 !theme plain
-title Log Analysis Pipeline Architecture
+title Web Log Analysis Pipeline Architecture
 
 start
 
@@ -19,15 +19,30 @@ start
 :normalized request fields;
 
 split
-    -left-> [5.1] Rule-based Detector;
+    -> [5.1] Rule-based Detector;
     :rule alerts;
-    -> [6] Risk Scoring & Post-processing;
-    -> [7] Exporter / Report;
+    -> [8] Risk Scoring & Post-processing;
+    -> [9] Exporter / Report;
     stop
+
 split again
-    -right-> [5.2] Feature Extractor;
+    -> [5.2] Feature Extractor;
     :features.csv;
-    stop
+
+    -> [6] AI Binary Model;
+    :normal / anomalous;
+
+    if (Prediction == anomalous?) then (yes)
+        -> [7] AI Multi-label Model;
+        :web attack types;
+        -> [8] Exporter / Report;
+        stop
+    else (no)
+        :normal traffic;
+        -> [8] Exporter / Report;
+        stop
+    endif
+
 end split
 
 @enduml

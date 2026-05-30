@@ -3,8 +3,7 @@ outputs/
 conversation_cache/
 data/
 back_up/
-a.md
-AGENTS.md
+*.md
 __pycache__/
 *.pyc
 *.pyo
@@ -17,8 +16,6 @@ __pycache__/
 *.codex
 **/.agents
 *.agents
-# Large/local artifacts
-outputs.zip
 outputs/
 .env
 .env.template
