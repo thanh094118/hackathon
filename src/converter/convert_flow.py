@@ -14,6 +14,7 @@ _START_BLOCK_PATTERN = re.compile(r"^Start\s*-\s*Id\s*:\s*.+$", re.IGNORECASE)
 _END_BLOCK_PATTERN = re.compile(r"^End\s*-\s*Id\s*:\s*.+$", re.IGNORECASE)
 
 MAX_PART_BYTES = 50 * 1024 * 1024
+PROGRESS_INTERVAL = 100000
 
 _URI_KEYS = ("raw_uri", "original_url", "uri", "url", "uri_path", "path", "request_uri", "cs_uri_stem", "request_http_request")
 _QUERY_KEYS = ("query_string", "query", "cs_uri_query")
@@ -38,6 +39,9 @@ def build_cli() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    import logging
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = build_cli().parse_args()
     summary = convert_file(input_path=args.input, output_root=args.output_root, server_type=args.server_type)
 
@@ -97,10 +101,14 @@ def _convert_single_file(*, path: Path, output_root: Path, server_type: Optional
 
     items = list(_iter_input_items(path))
     lines: List[str] = []
+    raw_line_count = 0
     for item in items:
         for line in _to_raw_log_lines(item):
             if line.strip():
                 lines.append(line.strip())
+                raw_line_count += 1
+                if raw_line_count % PROGRESS_INTERVAL == 0:
+                    print(f"[+] Converting {path.name}: {raw_line_count} raw lines processed", flush=True)
 
     parts = _chunk_lines_by_bytes(lines, MAX_PART_BYTES)
     outputs: List[str] = []

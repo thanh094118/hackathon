@@ -20,3 +20,8 @@ __pycache__/
 # Large/local artifacts
 outputs.zip
 outputs/
+.env
+.env.template
+a.puml
+docs/detailed description.pdf
+output_test/

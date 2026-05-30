@@ -116,21 +116,13 @@ class RequestPreprocessor:
         Args:
             max_decode_rounds:
                 Maximum number of mixed HTML-entity + percent decode rounds.
-                Default 5 catches common double/triple encoding while keeping
-                runtime bounded.
-
             field_separator:
-                Separator used in normalized_request. Use a clear boundary so
-                rules can distinguish method/url/user-agent context.
-
+                Separator used in normalized_request. 
             max_field_length:
-                Safety guard for very large fields. Long values are truncated
-                before expensive normalization/decode.
-
+                Safety guard for very large fields. 
             overwrite_existing:
                 If False, raises ValueError when the input record already
-                contains fields produced by this preprocessor. This helps catch
-                accidental double preprocessing.
+                contains fields produced by this preprocessor. 
         """
         if max_decode_rounds <= 0:
             raise ValueError("max_decode_rounds must be > 0")
@@ -147,17 +139,6 @@ class RequestPreprocessor:
     def preprocess(self, record: Dict[str, Any]) -> Dict[str, Any]:
         """
         Preprocess a normalized parser record.
-
-        Expected input fields:
-        - uri
-        - query_string
-        - user_agent
-        - http_method
-
-        Output:
-        - Original record fields are preserved.
-        - Preprocessed fields are added.
-        - preprocess_status is "success" unless warnings/errors were collected.
         """
         preprocess_errors: list[str] = []
 
@@ -283,26 +264,10 @@ class RequestPreprocessor:
         return enriched
 
     def _safe_decode_uri(self, value: str) -> tuple[str, Dict[str, Any]]:
-        """
-        Decode URI/path component.
-
-        Uses unquote(), not unquote_plus(), because '+' must stay literal in URI path.
-        """
         return self._safe_decode(value, percent_decoder=unquote)
 
     def _safe_decode_query(self, value: str) -> tuple[str, Dict[str, Any]]:
-        """
-        Decode query string.
-
-        Round 1 uses unquote_plus():
-        - '+' from original query means space.
-        - '%2B' becomes literal '+'.
-
-        Later rounds use unquote():
-        - Avoid converting literal '+' produced from '%2B' into spaces.
-        """
         return self._safe_decode_query_mixed(value)
-
 
     def _safe_decode_query_mixed(self, value: str) -> tuple[str, Dict[str, Any]]:
         original = str(value or "")
@@ -334,13 +299,6 @@ class RequestPreprocessor:
         }
 
     def _safe_decode_text(self, value: str) -> tuple[str, Dict[str, Any]]:
-        """
-        Decode text-like fields such as User-Agent.
-
-        User-Agent can contain HTML entities or percent-encoded payloads in attack
-        datasets. Use unquote(), not unquote_plus(), to avoid converting literal '+'
-        characters in product tokens.
-        """
         return self._safe_decode(value, percent_decoder=unquote)
 
     def _safe_decode(
@@ -349,12 +307,6 @@ class RequestPreprocessor:
         *,
         percent_decoder,
     ) -> tuple[str, Dict[str, Any]]:
-        """
-        Decode mixed HTML entity + percent encoding for a bounded number of rounds.
-
-        changed is computed by comparing final result with the original text,
-        not by depth alone.
-        """
         original = str(value or "")
         if not original:
             return "", {"depth": 0, "changed": False, "limit_reached": False}
@@ -373,8 +325,6 @@ class RequestPreprocessor:
             depth += 1
 
             if round_index == self.max_decode_rounds - 1:
-                # If another round would still change the value, flag that the
-                # payload may still be encoded.
                 probe = self._decode_one_round(decoded, percent_decoder=percent_decoder)
                 limit_reached = probe != decoded
 
@@ -386,33 +336,14 @@ class RequestPreprocessor:
 
     @staticmethod
     def _decode_one_round(value: str, *, percent_decoder) -> str:
-        """
-        One decode round:
-        - First HTML entity decode, e.g. &lt;script&gt; -> <script>
-        - Then percent decode, e.g. %3Cscript%3E -> <script>
-
-        Doing both in each round handles mixed encodings such as
-        %26lt%3Bscript%26gt%3B -> &lt;script&gt; -> <script>.
-        """
         html_decoded = html.unescape(value)
         return percent_decoder(html_decoded)
 
     def _normalize_text(self, value: str) -> str:
-        """
-        Backward-compatible helper returning only normalized text.
-        """
         normalized, _meta = self._normalize_text_with_meta(value)
         return normalized
 
     def _normalize_text_with_meta(self, value: str) -> tuple[str, Dict[str, bool]]:
-        """
-        Normalize text for rule detection:
-        - Unicode NFKC normalization maps fullwidth forms to ASCII-like forms.
-        - Lowercase.
-        - Remove ASCII control chars, DEL, soft hyphen.
-        - Remove Unicode Cc/Cf characters, including zero-width format chars.
-        - Collapse whitespace.
-        """
         if not value:
             return "", {"removed_control_chars": False}
 
@@ -447,9 +378,6 @@ class RequestPreprocessor:
         return self.MULTI_SPACE_PATTERN.sub(" ", str(value)).strip()
 
     def _input_text(self, value: Any, field_name: str, errors: list[str]) -> str:
-        """
-        Convert input value to safe string and apply max length guard.
-        """
         if value is None:
             return ""
 

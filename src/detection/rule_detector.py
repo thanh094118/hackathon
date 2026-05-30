@@ -9,7 +9,6 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Pattern, Tuple
 
 import yaml
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -124,7 +123,7 @@ class RuleDetector:
                 severity = str(rule.get("severity", "low")).lower()
                 score = int(rule.get("score", 0))
 
-                matched = {
+                match_record = {
                     "id": rule.get("id"),
                     "category": category,
                     "description": rule.get("description", ""),
@@ -136,8 +135,8 @@ class RuleDetector:
                     "type": rule.get("type"),
                 }
                 if match_context.get("matched_text") is not None:
-                    matched["matched_text"] = match_context["matched_text"]
-                matched_rules.append(matched)
+                    match_record["matched_text"] = match_context["matched_text"]
+                matched_rules.append(match_record)
 
                 attack_types.add(category)
                 max_severity_rank = max(max_severity_rank, self._severity_rank(severity))
@@ -171,7 +170,12 @@ class RuleDetector:
 
     def _load_rules(self, path: Path) -> Tuple[Dict[str, List[Dict[str, Any]]], List[str], str]:
         if not path.exists():
-            raise FileNotFoundError(f"Rule YAML file not found: {path}")
+            # Try fallback to data/labels if src/rules doesn't exist
+            fallback = Path("data/labels/attack_patterns.yaml")
+            if fallback.exists():
+                path = fallback
+            else:
+                raise FileNotFoundError(f"Rule YAML file not found: {path}")
 
         size = path.stat().st_size
         if size > self.max_yaml_size_bytes:
@@ -303,15 +307,6 @@ class RuleDetector:
     def _looks_redos_risky(pattern: str) -> bool:
         """
         Lightweight heuristic for common catastrophic backtracking forms.
-
-        This intentionally catches simple nested quantifiers such as:
-        - (a+)+b
-        - ([a-z]*)+
-
-        It avoids flagging broader, contextual security rules that use
-        alternation/lookahead plus bounded literal context. This heuristic is not
-        a formal proof of regex safety. For stronger guarantees, use RE2 or run
-        regex matching in an isolated process with a timeout.
         """
         compact = pattern.replace(" ", "")
         simple_nested_quantifier = re.compile(
@@ -388,7 +383,6 @@ class RuleDetector:
         """
         Score aggregation:
         - Use max score per category instead of raw sum of all rules.
-        - This prevents many weak same-category matches from inflating score.
         """
         score_by_category: Dict[str, int] = {}
         for rule in matched_rules:
@@ -458,7 +452,6 @@ class RuleDetector:
         if not score_by_category:
             return None
 
-        # Tie-break by severity rank to avoid many low rules beating one high/critical rule.
         severity_by_category = cls._severity_by_category(matched_rules)
 
         def sort_key(item: Tuple[str, int]) -> Tuple[int, int, str]:

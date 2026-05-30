@@ -17,6 +17,7 @@ class PostProcessor:
         normalized_logs: List[Dict],
         preprocessed_requests: List[Dict],
         scored_records: List[Dict],
+        ml_predictions: List[Dict] | None,
         alerts: List[Dict],
     ) -> Dict:
         parse_errors = sum(1 for row in parsed_logs if row.get("parse_error"))
@@ -25,6 +26,16 @@ class PostProcessor:
             row.get("attack_type")
             for row in alerts
             if row.get("attack_type")
+        )
+        ml_label_counts = Counter(
+            str(row.get("ml_label", "")).lower()
+            for row in (ml_predictions or [])
+            if row.get("ml_label")
+        )
+        ml_attack_types = Counter(
+            row.get("ml_attack_type")
+            for row in (ml_predictions or [])
+            if row.get("ml_attack_type")
         )
         rule_hits = Counter()
         for row in alerts:
@@ -52,5 +63,14 @@ class PostProcessor:
                 "malicious": label_counts.get("malicious", 0),
             },
             "top_attack_types": alert_attack_types.most_common(5),
+            "ml": {
+                "enabled": bool(ml_predictions),
+                "prediction_count": len(ml_predictions or []),
+                "labels": {
+                    "benign": ml_label_counts.get("benign", 0),
+                    "attack": ml_label_counts.get("attack", 0),
+                },
+                "top_attack_types": ml_attack_types.most_common(5),
+            },
             "top_matched_rule_ids": rule_hits.most_common(10),
         }

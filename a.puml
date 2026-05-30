@@ -1,4 +1,4 @@
-@startuml name
+@startuml
 !theme plain
 title Log Analysis Pipeline Architecture
 

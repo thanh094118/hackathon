@@ -119,19 +119,28 @@ class Normalizer:
         if not raw_uri:
             return None, None, None
 
-        split_result = urlsplit(raw_uri)
-        uri = split_result.path or raw_uri.split("#", 1)[0].split("?", 1)[0] or None
+        try:
+            split_result = urlsplit(raw_uri)
+            uri = split_result.path or raw_uri.split("#", 1)[0].split("?", 1)[0] or None
+            
+            if split_result.query:
+                query_string = split_result.query
+            else:
+                pre_fragment = raw_uri.split("#", 1)[0]
+                query_string = pre_fragment.split("?", 1)[1] if "?" in pre_fragment else ""
 
-        # Only extract fallback query from the part before '#'. This prevents
-        # malformed values like /path#frag?fake=1 from producing fake query data.
-        if split_result.query:
-            query_string = split_result.query
-        else:
-            pre_fragment = raw_uri.split("#", 1)[0]
-            query_string = pre_fragment.split("?", 1)[1] if "?" in pre_fragment else ""
-
-        fragment = split_result.fragment or None
-        return uri, query_string, fragment
+            fragment = split_result.fragment or None
+            return uri, query_string, fragment
+        except Exception:
+            # Fallback for truly malformed URLs
+            uri = raw_uri.split("#", 1)[0].split("?", 1)[0]
+            query_string = ""
+            if "?" in raw_uri:
+                query_string = raw_uri.split("?", 1)[1].split("#", 1)[0]
+            fragment = None
+            if "#" in raw_uri:
+                fragment = raw_uri.split("#", 1)[1]
+            return uri, query_string, fragment
 
     def _normalize_timestamp(
         self,
@@ -151,6 +160,7 @@ class Normalizer:
             if dt is not None and dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
         else:
+            # Try ISO formats
             dt = self._parse_iso8601(text)
 
         if dt is None:

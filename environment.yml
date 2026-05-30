@@ -8,3 +8,12 @@ dependencies:
   - python-dateutil
   - pytest
   - pip
+  - numpy
+  - pandas
+  - joblib
+  - scikit-learn
+  - pip:
+      - pymongo
+      - dnspython
+      - python-dotenv
+      - gdown

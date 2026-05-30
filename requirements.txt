@@ -6,8 +6,13 @@ gdown
 # Test runner
 pytest
 
-# Optional/isolated AI test pipeline dependencies (test_pipeline/)
-joblib
+# Persistence
+pymongo
+dnspython
+python-dotenv
+
+# AI / Features
 numpy
 pandas
+joblib
 scikit-learn

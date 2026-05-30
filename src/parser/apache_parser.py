@@ -98,11 +98,13 @@ class ApacheParser(BaseParser):
             if ip_error:
                 return self._error_record(line=line, message=ip_error)
 
-            status_code, status_error = self._parse_status_code(data.get("status_code"))
+            status_code_raw = data.get("status_code")
+            status_code, status_error = self._parse_status_code(status_code_raw)
             if status_error:
                 return self._error_record(line=line, message=status_error)
 
-            response_size, size_error = self._parse_response_size(data.get("response_size"))
+            response_size_raw = data.get("response_size")
+            response_size, size_error = self._parse_response_size(response_size_raw)
             if size_error:
                 return self._error_record(line=line, message=size_error)
 
@@ -112,6 +114,7 @@ class ApacheParser(BaseParser):
             data["response_size"] = response_size
             data["parse_error"] = False
             data.setdefault("error_message", None)
+            data["server_type"] = self.server_type
 
             return data
 

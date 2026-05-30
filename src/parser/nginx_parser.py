@@ -103,6 +103,7 @@ class NginxParser(BaseParser):
             data["response_size"] = response_size
             data["parse_error"] = False
             data.setdefault("error_message", None)
+            data["server_type"] = self.server_type
 
             return data
 
