@@ -4,6 +4,12 @@ conversation_cache/
 data/
 back_up/
 *.md
+!AGENTS.md
+!conversation_cache/
+!conversation_cache/*.md
+.env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 *.pyo

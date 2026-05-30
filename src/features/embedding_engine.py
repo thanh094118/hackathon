@@ -1,5 +1,6 @@
 from __future__ import annotations
 import logging
+import hashlib
 from typing import List, Optional
 
 try:
@@ -13,12 +14,23 @@ class EmbeddingEngine:
     """
     Module: Embedding Engine.
     Converts log requests into vector space for similarity search.
-    This implementation uses a pre-trained SentenceTransformer model (e.g. all-MiniLM-L6-v2)
-    to generate semantic vectors from log lines.
+    If sentence-transformers is installed, uses a pre-trained model (e.g. all-MiniLM-L6-v2)
+    to generate semantic vectors from log lines. Otherwise, falls back to a deterministic
+    hashing trick to generate fixed-size vectors.
     """
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2", device: Optional[str] = None):
-        self.model_name = model_name
+    def __init__(
+        self,
+        model_name_or_vector_size = "all-MiniLM-L6-v2",
+        device: Optional[str] = None,
+        vector_size: Optional[int] = None
+    ):
+        if isinstance(model_name_or_vector_size, int):
+            self.vector_size_override = model_name_or_vector_size
+            self.model_name = "all-MiniLM-L6-v2"
+        else:
+            self.model_name = model_name_or_vector_size
+            self.vector_size_override = vector_size
         self.device = device
         self._model: Optional[SentenceTransformer] = None
         self._vector_size: Optional[int] = None
@@ -37,24 +49,46 @@ class EmbeddingEngine:
     @property
     def vector_size(self) -> int:
         if self._vector_size is None:
-            # sentence-transformers modern API uses get_embedding_dimension
-            if hasattr(self.model, "get_embedding_dimension"):
-                self._vector_size = self.model.get_embedding_dimension()
+            if self.vector_size_override is not None:
+                self._vector_size = self.vector_size_override
+            elif HAS_SENTENCE_TRANSFORMERS:
+                try:
+                    if hasattr(self.model, "get_embedding_dimension"):
+                        self._vector_size = self.model.get_embedding_dimension()
+                    else:
+                        self._vector_size = self.model.get_sentence_embedding_dimension()
+                except Exception:
+                    self._vector_size = 384
             else:
-                self._vector_size = self.model.get_sentence_embedding_dimension()
+                self._vector_size = 384
         return self._vector_size
 
     def get_embedding(self, text: str) -> List[float]:
         """
         Generate semantic vector embedding for a single text.
+        Falls back to a hashing trick if sentence-transformers is not available.
         """
+        if HAS_SENTENCE_TRANSFORMERS:
+            try:
+                if not text:
+                    dim = self.vector_size
+                    return [0.0] * dim
+                embedding = self.model.encode(text, convert_to_numpy=True)
+                return embedding.tolist()
+            except Exception as e:
+                logging.warning(f"SentenceTransformer failed, falling back to hashing trick: {e}")
+        
+        # Hashing trick fallback
+        size = self.vector_size
         if not text:
-            # If not loaded yet, try to get default vector size, default to 384 for all-MiniLM-L6-v2
-            dim = self.vector_size if HAS_SENTENCE_TRANSFORMERS else 384
-            return [0.0] * dim
-
-        embedding = self.model.encode(text, convert_to_numpy=True)
-        return embedding.tolist()
+            return [0.0] * size
+            
+        hash_val = hashlib.sha256(text.encode("utf-8")).digest()
+        vector = []
+        for i in range(size):
+            idx = i % len(hash_val)
+            vector.append(float(hash_val[idx]) / 255.0)
+        return vector
 
     def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
@@ -62,6 +96,12 @@ class EmbeddingEngine:
         """
         if not texts:
             return []
-
-        embeddings = self.model.encode(texts, convert_to_numpy=True)
-        return embeddings.tolist()
+            
+        if HAS_SENTENCE_TRANSFORMERS:
+            try:
+                embeddings = self.model.encode(texts, convert_to_numpy=True)
+                return embeddings.tolist()
+            except Exception as e:
+                logging.warning(f"SentenceTransformer batch encode failed, falling back to hashing: {e}")
+                
+        return [self.get_embedding(t) for t in texts]

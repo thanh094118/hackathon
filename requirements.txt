@@ -2,6 +2,10 @@
 pyyaml
 python-dateutil
 gdown
+pymongo
+python-dotenv
+streamlit
+plotly
 
 # Test runner
 pytest

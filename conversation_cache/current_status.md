@@ -1,0 +1,40 @@
+# Current Status (2026-05-30)
+
+- Dashboard integration with Issue 2.3 query library is now implemented:
+  - Added centralized query module: `src/scoring/mongodb_queries.py`.
+  - `src/dashboard/query_adapter.py` now delegates complex MongoDB logic to centralized functions:
+    - `explain_threat_via_vector_search`
+    - `detect_attack_campaigns`
+    - `generate_attack_timeline`
+    - `get_attack_type_distribution`
+    - `get_top_attacking_ips`
+  - UI files remain free of raw MongoDB aggregation/vector-search logic.
+- Verification for integration run:
+  - `pytest -q tests/test_dashboard_query_adapter.py` => `5 passed`
+  - `python -m compileall src` => success
+  - `python -c "from src.dashboard.app import main; ..."` (system python) => fails (`streamlit` missing)
+  - `/home/thanh/miniconda3/envs/easymocap/bin/python -c "from src.dashboard.app import main; ..."` => success
+  - `DASHBOARD_USE_MOCK=1 ... DashboardQueryAdapter ...` => mock mode works and returns safe data
+- Repository currently still contains many pre-existing out-of-scope staged/modified files (backend/ML/data/infra), and `.env` is still present in staged state (`AD`) in this working tree snapshot.
+
+- Pulled updates were cleaned into an Issue 3 dashboard-only working set.
+- Backup artifacts were created before cleanup:
+  - `/tmp/issue3_cleanup_backup/unstaged_before_cleanup.patch`
+  - `/tmp/issue3_cleanup_backup/staged_before_cleanup.patch`
+  - `/tmp/issue3_cleanup_backup/status_before_cleanup.txt`
+- Secret handling:
+  - `.env` was removed from Git index and is now ignored by `.gitignore`.
+  - `.env.example` is sanitized and contains placeholders only.
+  - Credentials that were previously exposed in local/staged state must be rotated by project owners.
+- Out-of-scope backend/ML/data/test artifacts from the pull were removed from the Issue 3 diff.
+- Current intended change scope is limited to:
+  - `src/dashboard/*`
+  - `.env.example`
+  - `requirements.txt`
+  - `.gitignore`
+  - `AGENTS.md`
+  - `conversation_cache/*`
+- Verification executed during cleanup:
+  - `git status --short`
+  - `git diff --name-only`
+  - `git diff --cached --name-only`

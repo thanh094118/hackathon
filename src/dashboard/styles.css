@@ -1,0 +1,218 @@
+:root {
+  --tl-bg: #0b1020;
+  --tl-surface: #111827;
+  --tl-surface-2: #172033;
+  --tl-border: #263247;
+  --tl-primary: #38bdf8;
+  --tl-success: #22c55e;
+  --tl-warning: #f59e0b;
+  --tl-danger: #ef4444;
+  --tl-text: #e5e7eb;
+  --tl-muted: #94a3b8;
+}
+
+.stApp {
+  background: radial-gradient(circle at 10% 10%, #101a31 0%, var(--tl-bg) 45%) fixed;
+  color: var(--tl-text);
+}
+
+section[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #0f172a 0%, #0b1326 100%);
+  border-right: 1px solid var(--tl-border);
+}
+
+section[data-testid="stSidebar"] * {
+  color: var(--tl-text);
+}
+
+.tl-brand {
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: var(--tl-primary);
+  letter-spacing: 0.2px;
+}
+
+.tl-tagline {
+  color: var(--tl-muted);
+  font-size: 0.88rem;
+  margin-top: 0.2rem;
+}
+
+.tl-card {
+  background: linear-gradient(160deg, rgba(23, 32, 51, 0.92), rgba(17, 24, 39, 0.95));
+  border: 1px solid var(--tl-border);
+  border-radius: 14px;
+  padding: 0.95rem 1rem;
+  box-shadow: 0 10px 30px rgba(5, 10, 24, 0.35);
+}
+
+.tl-metric-card {
+  min-height: 108px;
+}
+
+.tl-metric-label {
+  color: var(--tl-muted);
+  font-size: 0.84rem;
+  margin-bottom: 0.3rem;
+}
+
+.tl-metric-value {
+  color: var(--tl-text);
+  font-size: 1.9rem;
+  line-height: 1.1;
+  font-weight: 700;
+}
+
+.tl-metric-delta {
+  margin-top: 0.4rem;
+  color: var(--tl-primary);
+  font-size: 0.82rem;
+}
+
+.tl-metric-help {
+  margin-top: 0.35rem;
+  color: var(--tl-muted);
+  font-size: 0.75rem;
+}
+
+.tl-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.45rem;
+}
+
+.tl-status-label {
+  color: var(--tl-muted);
+  font-size: 0.84rem;
+}
+
+.tl-status-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.18rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.tl-status-connected {
+  color: #0f5132;
+  background: rgba(34, 197, 94, 0.28);
+  border-color: rgba(34, 197, 94, 0.45);
+}
+
+.tl-status-mock-mode,
+.tl-status-mock {
+  color: #0c4a6e;
+  background: rgba(56, 189, 248, 0.3);
+  border-color: rgba(56, 189, 248, 0.55);
+}
+
+.tl-status-not-connected,
+.tl-status-error {
+  color: #7f1d1d;
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.55);
+}
+
+.tl-severity {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.72rem;
+  border: 1px solid transparent;
+}
+
+.tl-severity-critical,
+.tl-severity-high {
+  color: #fee2e2;
+  background: rgba(239, 68, 68, 0.34);
+  border-color: rgba(239, 68, 68, 0.52);
+}
+
+.tl-severity-medium {
+  color: #fef3c7;
+  background: rgba(245, 158, 11, 0.27);
+  border-color: rgba(245, 158, 11, 0.48);
+}
+
+.tl-severity-low,
+.tl-severity-unknown {
+  color: #d1fae5;
+  background: rgba(34, 197, 94, 0.22);
+  border-color: rgba(34, 197, 94, 0.42);
+}
+
+.tl-empty-state {
+  text-align: center;
+  padding: 1.4rem;
+}
+
+.tl-empty-title {
+  color: var(--tl-text);
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.tl-empty-message {
+  color: var(--tl-muted);
+  font-size: 0.92rem;
+}
+
+.tl-pattern-card {
+  margin-bottom: 0.65rem;
+}
+
+.tl-pattern-title {
+  color: var(--tl-primary);
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.tl-pattern-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  color: var(--tl-muted);
+  font-size: 0.82rem;
+  margin-bottom: 0.5rem;
+}
+
+.tl-pattern-desc {
+  color: var(--tl-text);
+  font-size: 0.9rem;
+}
+
+.tl-recommendations-title {
+  margin-top: 0.6rem;
+  margin-bottom: 0.3rem;
+  color: var(--tl-primary);
+  font-weight: 600;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--tl-text) !important;
+}
+
+[data-testid="stMetricValue"],
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li {
+  color: var(--tl-text);
+}
+
+[data-testid="stDataFrame"] {
+  border: 1px solid var(--tl-border);
+  border-radius: 10px;
+}
+
+code,
+pre {
+  border-radius: 10px !important;
+}
