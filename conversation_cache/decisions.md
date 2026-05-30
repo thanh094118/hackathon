@@ -1,5 +1,9 @@
 # Decisions (2026-05-30)
 
+- Alert notifications remain loosely coupled in `src/alerts/`; no parser, normalizer, detection, scoring, exporter, or main pipeline integration is implemented yet.
+- Alert delivery must return `AlertSendResult` objects and isolate channel failures so one failed notifier does not crash or block other channels.
+- Alert dry-run mode should not require real channel credentials and must avoid network calls.
+
 - Centralize dashboard complex MongoDB logic in `src/scoring/mongodb_queries.py` and keep `src/dashboard/query_adapter.py` focused on:
   - env/mode handling
   - connection/fallback behavior
@@ -25,4 +29,3 @@
 - Reset AGENTS guidance to non-ML core pipeline baseline and keep dashboard work isolated from runtime core flow changes.
 - Mandatory sentence-transformers: enforce hard requirement for sentence-transformers and remove the fallback hashing trick.
 - Robust IP Aggregation: aggregation queries grouping or matching on IP addresses must support both `$source_ip` and `$ip` using `$ifNull` array logic or `$or` matching to remain backward-compatible with normalized fields (`source_ip`) and fallback schemas.
-

@@ -1,5 +1,12 @@
 # Current Status (2026-05-30)
 
+- **Loose-Coupled Alert Notifications (2026-05-31)**:
+  - Added standalone `src/alerts/` package for reusable Email, Telegram, and Slack alert delivery.
+  - Implemented flexible `AlertEvent.from_incident(...)`, structured `AlertSendResult`, environment-backed `AlertConfig`, dry-run support, safe missing-credential handling, and dispatcher-level failure isolation.
+  - Added placeholder-only `.env.example` alert settings; local `.env` was not modified.
+  - Verified with `python -m compileall src` and `pytest -q tests/test_alerts.py`.
+  - Removed generated Python cache directories under `src/` and `tests/` after verification.
+
 - **MongoDB Exporter Chunking**:
   - Implemented command chunking in `src/exporters/mongodb_exporter.py` with `chunk_size = 1000`.
   - This successfully prevents TCP socket timeouts and connection closed errors on large bulk writes.
