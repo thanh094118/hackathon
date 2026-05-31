@@ -28,3 +28,6 @@ a.puml
 docs/detailed description.pdf
 output_test/
 *.txt
+node_modules/
+src/simualator/
+src/notifications
