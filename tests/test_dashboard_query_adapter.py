@@ -246,3 +246,64 @@ class TestQueryAdapterAdvancedFeatures:
         assert results[0]["total_attacks"] == 60
         assert "SQLI" in results[0]["attack_types"]
 
+    def test_get_materialized_campaigns_mock(self):
+        adapter = DashboardQueryAdapter(use_mock=True)
+        res = adapter.get_materialized_campaigns()
+        # In mock mode, should fall back to get_active_campaigns
+        assert len(res) > 0
+        assert "ip" in res[0]
+        assert "risk_level" in res[0]
+
+    def test_get_materialized_campaigns_live_success(self):
+        rows = [
+            {
+                "ip": "1.2.3.4",
+                "total_attacks": 42,
+                "attack_types": ["xss"],
+                "target_uris": ["/"],
+                "first_seen": "2026-05-30T10:00:00Z",
+                "last_seen": "2026-05-30T11:00:00Z",
+                "risk_level": "medium"
+            }
+        ]
+        adapter, _ = _make_live_adapter(rows, "requests")
+        adapter._status["mode"] = "mongodb"
+        adapter.campaigns_collection_name = "active_campaigns"
+
+        import src.scoring.mongodb_queries as mq
+        with patch.object(mq, "get_materialized_campaigns", return_value=rows) as mock_fn:
+            results = adapter.get_materialized_campaigns(limit=10)
+
+        mock_fn.assert_called_once_with(adapter.db, campaigns_collection="active_campaigns", limit=10)
+        assert len(results) == 1
+        assert results[0]["ip"] == "1.2.3.4"
+        assert results[0]["risk_level"] == "medium"
+
+    def test_get_materialized_campaigns_live_empty_fallback(self):
+        # If get_materialized_campaigns returns empty/errors, should fallback to get_active_campaigns
+        adapter, _ = _make_live_adapter([], "requests")
+        adapter._status["mode"] = "mongodb"
+        
+        fallback_rows = [{"ip": "9.9.9.9", "total_attacks": 12, "attack_types": ["sqli"], "target_uris": []}]
+
+        import src.scoring.mongodb_queries as mq
+        with patch.object(mq, "get_materialized_campaigns", return_value=[]), \
+             patch.object(mq, "detect_attack_campaigns", return_value=fallback_rows):
+            results = adapter.get_materialized_campaigns()
+
+        assert len(results) == 1
+        assert results[0]["ip"] == "9.9.9.9"
+
+    def test_get_materialized_campaigns_count_live(self):
+        adapter, _ = _make_live_adapter([], "requests")
+        adapter._status["mode"] = "mongodb"
+        adapter.campaigns_collection_name = "active_campaigns"
+
+        meta = {"count": 5, "last_updated": "2026-05-31T00:00:00Z"}
+        import src.scoring.mongodb_queries as mq
+        with patch.object(mq, "get_campaigns_metadata", return_value=meta) as mock_fn:
+            results = adapter._get_materialized_campaigns_count()
+
+        mock_fn.assert_called_once_with(adapter.db, campaigns_collection="active_campaigns")
+        assert results["count"] == 5
+        assert results["last_updated"] == "2026-05-31T00:00:00Z"

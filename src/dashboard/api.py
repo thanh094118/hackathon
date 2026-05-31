@@ -64,6 +64,10 @@ def get_blast_radius(ip: str):
 def get_campaigns(min_attacks: int = Query(50, ge=1), min_attack_types: int = Query(3, ge=1), timeframe: Optional[str] = Query(None)):
     return query_engine.get_active_campaigns(min_attacks=min_attacks, min_attack_types=min_attack_types, timeframe=timeframe)
 
+@app.get("/api/materialized-campaigns")
+def get_materialized_campaigns(limit: int = Query(50, ge=1)):
+    return query_engine.get_materialized_campaigns(limit=limit)
+
 @app.get("/api/incidents")
 def get_incidents(limit: int = Query(100, ge=1), method: str = "All", timeframe: Optional[str] = Query(None)):
     return query_engine.get_recent_incidents(limit=limit, method_filter=method, timeframe=timeframe)

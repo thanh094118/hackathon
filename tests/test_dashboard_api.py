@@ -97,3 +97,10 @@ def test_api_timeframe_parameters():
         
         response = client.get(f"/api/incidents?limit=10&timeframe={timeframe}")
         assert response.status_code == 200
+
+def test_api_materialized_campaigns():
+    response = client.get("/api/materialized-campaigns?limit=10")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+

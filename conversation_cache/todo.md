@@ -36,4 +36,12 @@
   - [x] Update frontend static files (`src/dashboard/static/index.html`) to dynamically refresh all widgets on timeframe dropdown changes.
   - [x] Write and verify unit tests (`tests/test_dashboard_query_adapter.py` and `tests/test_dashboard_api.py`).
   - [x] Verify visual rendering and interaction via browser subagent.
+- [x] Implement Hybrid CQRS APT Campaign Detection:
+  - [x] Add get_materialized_campaigns and get_campaigns_metadata helpers to `src/scoring/mongodb_queries.py`.
+  - [x] Integrate dual-path campaigns query (fast path + fallback) in `src/dashboard/query_adapter.py`.
+  - [x] Expose `/api/materialized-campaigns` endpoint in `src/dashboard/api.py`.
+  - [x] Update frontend overview card freshness display and add materialized view badge in `src/dashboard/static/index.html`.
+  - [x] Add unit tests verifying query functions and API routes.
+  - [x] Provide JavaScript Trigger code and manual configuration setup walkthrough.
+
 

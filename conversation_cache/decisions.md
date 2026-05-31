@@ -32,4 +32,8 @@
 - Stream Simulator Real-Time Timestamp Alignment:
   - During stream simulation, static CSV timestamps (from July 2020) are dynamically overridden at the producer-ingestion point with the current UTC system time (to the second) using the standard Apache access log format (`%d/%b/%Y:%H:%M:%S %z`).
   - This ensures that simulated requests match the wall-clock time at which they are actually processed, keeping them visible inside active real-time dashboard filter boundaries (e.g., "last 15 minutes", "last 24 hours") and allowing the charts to plot live scrolling data.
+- Hybrid CQRS APT Campaign Detection:
+  - Materialize APT attack campaigns into an `active_campaigns` collection using a MongoDB Atlas Scheduled Trigger running a JavaScript aggregation pipeline every 60 seconds with a `$merge` output stage.
+  - Keep python-side dynamic queries in place to handle adjustable dynamic sliders (`min_attacks` and `min_attack_types`) in the UI campaigns table, satisfying both performance (for fast page loads / counts) and interactive flexibility requirements.
+
 

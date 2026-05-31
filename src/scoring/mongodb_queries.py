@@ -678,3 +678,56 @@ def search_logs_by_text(
         return []
     query_vector = embedding_engine.get_embedding(query_text)
     return find_similar_logs(collection, query_vector, limit, filter_dict)
+
+
+def get_materialized_campaigns(
+    db: Any,
+    *,
+    campaigns_collection: str = "active_campaigns",
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    """Read pre-computed campaigns from the Atlas-materialized view.
+    
+    The 'active_campaigns' collection is populated by an Atlas Scheduled
+    Trigger running a $merge pipeline every 60 seconds. This function
+    simply reads the latest snapshot — no heavy aggregation needed.
+    """
+    collection = _collection(db, campaigns_collection)
+    if collection is None:
+        return []
+    try:
+        return list(
+            collection.find(
+                {"status": "active"},
+                {"_id": 0},
+            )
+            .sort("total_attacks", -1)
+            .limit(max(1, _safe_int(limit, 50)))
+        )
+    except Exception as e:
+        logging.error(f"Error during get_materialized_campaigns: {e}")
+        return []
+
+
+def get_campaigns_metadata(
+    db: Any,
+    *,
+    campaigns_collection: str = "active_campaigns",
+) -> Dict[str, Any]:
+    """Return metadata about the materialized campaigns collection."""
+    collection = _collection(db, campaigns_collection)
+    if collection is None:
+        return {"count": 0, "last_updated": None}
+    try:
+        count = collection.count_documents({"status": "active"})
+        latest = collection.find_one(
+            {}, {"materialized_at": 1}, sort=[("materialized_at", -1)]
+        )
+        return {
+            "count": count,
+            "last_updated": latest.get("materialized_at") if latest else None,
+        }
+    except Exception as e:
+        logging.error(f"Error during get_campaigns_metadata: {e}")
+        return {"count": 0, "last_updated": None}
+

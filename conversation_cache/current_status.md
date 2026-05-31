@@ -48,3 +48,11 @@
   - Verified that changing the dropdown correctly filters out mock/live database queries to match target time ranges.
   - Verified that all unit tests and API integration tests pass with 100% success.
   - Visual rendering and interaction validated successfully via browser subagent.
+
+- **Hybrid CQRS APT Campaign Detection (Atlas Materialized Views)**:
+  - Upgraded the APT Campaign Detection system to a CQRS Hybrid architecture.
+  - Dynamic queries for interactive thresholds and sliders are kept on the Python backend (`detect_attack_campaigns`) to support live SOC analyst customization.
+  - Implemented background pre-computation using a MongoDB Atlas Scheduled Trigger running a JavaScript aggregation pipeline every 60 seconds, materializing the results into `active_campaigns` using the `$merge` operator.
+  - The dashboard dual-reads: overview count cards read from the fast `active_campaigns` collection (including a dynamic freshness timestamp/badge indicating the last materialization time), while the interactive campaigns table reads dynamically.
+  - Created new unit tests and REST endpoints (/api/materialized-campaigns) to verify the dual-path reads. Verified all test suites pass with 100% success.
+

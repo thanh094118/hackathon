@@ -334,9 +334,9 @@
                         </div>
                         <div>
                             <div id="metric-active-campaigns" class="font-display-lg text-3xl font-bold text-on-surface mb-1">0</div>
-                            <div class="font-data-mono text-[11px] text-secondary flex items-center gap-1">
-                                <span class="material-symbols-outlined text-[14px]">add</span>
-                                <span>1 new in last 24h</span>
+                            <div class="font-data-mono text-[10px] text-secondary flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[14px]">schedule</span>
+                                <span id="campaigns-freshness">Materialized via Atlas Trigger</span>
                             </div>
                         </div>
                     </div>
@@ -431,6 +431,9 @@
                             <h3 class="font-headline-md text-lg font-semibold text-on-surface flex items-center gap-2">
                                 <span class="material-symbols-outlined text-secondary">hub</span>
                                 Coordinated Campaign Detection (APT)
+                                <span class="bg-secondary/20 text-secondary font-label-caps text-[9px] px-2 py-0.5 rounded ml-2 uppercase">
+                                    Atlas Materialized View
+                                </span>
                             </h3>
                             <p class="font-body-md text-xs text-on-surface-variant mt-1">AI-driven clustering of distributed attack vectors matching threat tactics.</p>
                         </div>
@@ -873,6 +876,21 @@
                 animateCount("metric-malicious-requests", summary.malicious_requests || 0);
                 animateCount("metric-total-incidents", summary.total_incidents || 0);
                 animateCount("metric-active-campaigns", summary.active_campaigns || 0);
+
+                const freshnessEl = document.getElementById("campaigns-freshness");
+                if (freshnessEl) {
+                    if (summary.campaigns_last_updated) {
+                        try {
+                            const date = new Date(summary.campaigns_last_updated);
+                            const formatted = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                            freshnessEl.textContent = `Last materialized: ${formatted} UTC`;
+                        } catch (e) {
+                            freshnessEl.textContent = "Materialized via Atlas Trigger";
+                        }
+                    } else {
+                        freshnessEl.textContent = "Materialized via Atlas Trigger";
+                    }
+                }
             } catch (error) {
                 console.error("Failed to load summary metrics:", error);
             }

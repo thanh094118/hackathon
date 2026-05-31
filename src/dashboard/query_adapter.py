@@ -297,6 +297,7 @@ class DashboardQueryAdapter:
         self.requests_collection_name: Optional[str] = None
         self.incidents_collection_name: Optional[str] = None
         self.patterns_collection_name: Optional[str] = None
+        self.campaigns_collection_name: Optional[str] = None
 
         self._mock = self._build_mock_dataset()
         self._status = {
@@ -404,7 +405,7 @@ class DashboardQueryAdapter:
     # Overview tab query methods
     # -------------------------
 
-    def get_soc_summary(self, timeframe: Optional[str] = None) -> Dict[str, int]:
+    def get_soc_summary(self, timeframe: Optional[str] = None) -> Dict[str, Any]:
         if self.is_mock_mode():
             requests = self._filter_mock_by_timeframe(self._mock["requests"], timeframe)
             incidents = self._filter_mock_by_timeframe(self._mock["incidents"], timeframe)
@@ -421,6 +422,7 @@ class DashboardQueryAdapter:
                 "malicious_requests": len(malicious),
                 "total_incidents": len(incidents),
                 "active_campaigns": len(campaigns),
+                "campaigns_last_updated": None,
                 "high_severity_incidents": len(high_incidents),
             }
 
@@ -459,13 +461,14 @@ class DashboardQueryAdapter:
                 ),
             )
 
-        campaigns = self.get_active_campaigns(min_attacks=10, timeframe=timeframe)
+        materialized = self._get_materialized_campaigns_count()
 
         return {
             "total_requests": requests_count,
             "malicious_requests": malicious_count,
             "total_incidents": incident_count,
-            "active_campaigns": len(campaigns),
+            "active_campaigns": materialized.get("count", 0),
+            "campaigns_last_updated": materialized.get("last_updated"),
             "high_severity_incidents": high_severity,
         }
 
@@ -760,6 +763,57 @@ class DashboardQueryAdapter:
 
         campaigns.sort(key=lambda item: int(item.get("total_attacks", 0)), reverse=True)
         return campaigns
+
+    def get_materialized_campaigns(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Read pre-computed campaigns from Atlas Materialized View."""
+        if self.is_mock_mode():
+            return self.get_active_campaigns(min_attacks=10)
+        
+        if self.db is None or mongodb_queries is None or not hasattr(mongodb_queries, "get_materialized_campaigns"):
+            return self.get_active_campaigns(min_attacks=10)
+        
+        try:
+            coll_name = self.campaigns_collection_name or "active_campaigns"
+            rows = mongodb_queries.get_materialized_campaigns(self.db, campaigns_collection=coll_name, limit=limit)
+            if rows:
+                # Format dates and ensure proper shapes
+                formatted = []
+                for row in rows:
+                    formatted.append({
+                        "ip": row.get("ip", "Unknown"),
+                        "total_attacks": row.get("total_attacks", 0),
+                        "attack_types": row.get("attack_types") or [],
+                        "target_uris": row.get("target_uris") or [],
+                        "first_seen": _timestamp_to_text(row.get("first_seen")),
+                        "last_seen": _timestamp_to_text(row.get("last_seen")),
+                        "risk_level": row.get("risk_level", "low"),
+                    })
+                return formatted
+        except Exception:
+            pass
+        
+        # Fallback to dynamic aggregation if materialized view is empty or errors
+        return self.get_active_campaigns(min_attacks=10)
+
+    def _get_materialized_campaigns_count(self) -> Dict[str, Any]:
+        """Read campaign count from materialized view (fast path)."""
+        if self.is_mock_mode():
+            campaigns = self.get_active_campaigns(min_attacks=10)
+            return {"count": len(campaigns), "last_updated": None}
+
+        if self.db is None or mongodb_queries is None or not hasattr(mongodb_queries, "get_campaigns_metadata"):
+            campaigns = self.get_active_campaigns(min_attacks=10)
+            return {"count": len(campaigns), "last_updated": None}
+            
+        try:
+            coll_name = self.campaigns_collection_name or "active_campaigns"
+            return mongodb_queries.get_campaigns_metadata(self.db, campaigns_collection=coll_name)
+        except Exception:
+            try:
+                campaigns = self.get_active_campaigns(min_attacks=10)
+                return {"count": len(campaigns), "last_updated": None}
+            except Exception:
+                return {"count": 0, "last_updated": None}
 
     # -----------------------------
     # Investigation tab query methods
@@ -1197,6 +1251,7 @@ class DashboardQueryAdapter:
             self.requests_collection_name = self._pick_collection_name("requests", "logs")
             self.incidents_collection_name = self._pick_collection_name("incidents")
             self.patterns_collection_name = self._pick_collection_name("attack_patterns")
+            self.campaigns_collection_name = self._pick_collection_name("active_campaigns") or "active_campaigns"
 
             self._status.update(
                 {
