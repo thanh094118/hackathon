@@ -1,128 +1,78 @@
 from __future__ import annotations
 
 import argparse
-import itertools
 import random
-import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlencode
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-try:
-    from dotenv import load_dotenv
-except Exception:  # pragma: no cover - optional dependency
-    load_dotenv = None
-
-from src.simulator.engine import SimulationResult, run_simulation
+NORMAL_PATHS = ["/", "/home", "/products", "/about", "/contact", "/assets/app.js"]
+ATTACKS = {
+    "sqli": ("/product", {"id": "1 UNION SELECT username,password FROM users--"}),
+    "xss": ("/search", {"q": "<script>alert(1)</script>"}),
+    "traversal": ("/image", {"name": "../../../../etc/passwd"}),
+}
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run realtime traffic simulator (continuous).")
-    parser.add_argument("--mode", choices=["target-url"], default="target-url")
-    parser.add_argument("--attack-type", choices=["sqli", "xss", "traversal", "all"], default="all")
-    parser.add_argument("--target-url", default=None)
-    parser.add_argument("--interval", type=float, default=1.0)
-    parser.add_argument("--max-events", type=int, default=0, help="0 means run forever.")
-    parser.add_argument("--dry-run", action="store_true")
+    parser = argparse.ArgumentParser(description="Generate simulated access logs (apache/nginx/iis).")
+    parser.add_argument("--server-type", choices=["apache", "nginx", "iis"], default="apache")
+    parser.add_argument("--total-requests", type=int, default=100)
+    parser.add_argument("--output-file", default="data/input/access.log")
+    parser.add_argument("--seed", type=int, default=42)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    if load_dotenv is not None:
-        load_dotenv(PROJECT_ROOT / ".env")
-
     args = build_parser().parse_args(argv)
-    access_log_path = PROJECT_ROOT / "data" / "input" / "access.log"
-    access_log_path.parent.mkdir(parents=True, exist_ok=True)
-    return _run_continuous(args, access_log_path=access_log_path)
+    total = max(1, int(args.total_requests))
+    random.seed(args.seed)
 
+    output_path = Path(args.output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-def _run_continuous(args: argparse.Namespace, access_log_path: Path) -> int:
-    sent = 0
-    attack_cycle = itertools.cycle(["sqli", "xss", "traversal"] if args.attack_type == "all" else [args.attack_type])
-    try:
-        while True:
-            if args.max_events > 0 and sent >= args.max_events:
-                break
-            results = run_simulation(
-                mode=args.mode,
-                attack_type="normal",
-                count=1,
-                delay=0.0,
-                target_url=args.target_url,
-                dry_run=bool(args.dry_run),
-                force=True,
-            )
-            _print_results(results)
-            _append_access_logs(results, access_log_path)
-            sent += 1
+    lines = generate_log_lines(server_type=args.server_type, total_requests=total)
+    with output_path.open("w", encoding="utf-8") as f:
+        if args.server_type == "iis":
+            f.write("#Fields: date time c-ip cs-method cs-uri-stem cs-uri-query sc-status cs(User-Agent)\n")
+        for line in lines:
+            f.write(line + "\n")
 
-            if sent % 10 == 0:
-                attack_burst = random.randint(1, 2)
-                for _ in range(attack_burst):
-                    if args.max_events > 0 and sent >= args.max_events:
-                        break
-                    attack = next(attack_cycle)
-                    attack_results = run_simulation(
-                        mode=args.mode,
-                        attack_type=attack,
-                        count=1,
-                        delay=0.0,
-                        target_url=args.target_url,
-                        dry_run=bool(args.dry_run),
-                        force=True,
-                    )
-                    _print_results(attack_results)
-                    _append_access_logs(attack_results, access_log_path)
-                    sent += 1
-            time.sleep(max(0.1, float(args.interval)))
-    except KeyboardInterrupt:
-        print("Stopped by user.")
+    print(f"Generated {len(lines)} lines -> {output_path}")
     return 0
 
 
-def _append_access_logs(results: list[SimulationResult], access_log_path: Path) -> None:
-    with access_log_path.open("a", encoding="utf-8") as handle:
-        for result in results:
-            if not result.url:
-                continue
-            handle.write(_to_access_log_line(result) + "\n")
+def generate_log_lines(*, server_type: str, total_requests: int) -> list[str]:
+    attack_count = max(1, round(total_requests * (10 / 110)))
+    normal_count = total_requests - attack_count
+
+    events: list[tuple[str, str, dict[str, str], int, str]] = []
+    for _ in range(normal_count):
+        path = random.choice(NORMAL_PATHS)
+        events.append(("normal", path, {}, 200, "Mozilla/5.0"))
+    attack_keys = ["sqli", "xss", "traversal"]
+    for idx in range(attack_count):
+        key = attack_keys[idx % len(attack_keys)]
+        path, query = ATTACKS[key]
+        events.append((key, path, query, random.choice([200, 403, 404]), f"attack-simulator-{key}/1.0"))
+
+    random.shuffle(events)
+    return [format_line(server_type, ev_type, path, query, status, ua) for ev_type, path, query, status, ua in events]
 
 
-def _to_access_log_line(result: SimulationResult) -> str:
-    parsed = urlsplit(result.url or "")
-    target = parsed.path or "/"
-    if parsed.query:
-        target = f"{target}?{parsed.query}"
-    status = result.http_status if result.http_status is not None else (200 if result.success else 599)
-    user_agent = f"attack-simulator-{result.attack_type}/1.0"
-    timestamp = datetime.now(timezone.utc).strftime("%d/%b/%Y:%H:%M:%S %z")
-    return (
-        f'127.0.0.1 - - [{timestamp}] "GET {target} HTTP/1.1" '
-        f'{status} 0 "-" "{user_agent}"'
-    )
-
-
-def _print_results(results: list[SimulationResult]) -> None:
-    for result in results:
-        status = "OK" if result.success else "FAIL"
-        details = [
-            f"mode={result.mode}",
-            f"attack={result.attack_type}",
-        ]
-        if result.event_id:
-            details.append(f"event_id={result.event_id}")
-        if result.http_status is not None:
-            details.append(f"http_status={result.http_status}")
-        if result.error:
-            details.append(f"error={result.error}")
-        print(f"{status} {result.message} " + " ".join(details))
+def format_line(server_type: str, ev_type: str, path: str, query: dict[str, str], status: int, user_agent: str) -> str:
+    now = datetime.now(timezone.utc)
+    query_string = urlencode(query, doseq=True)
+    uri = path if not query_string else f"{path}?{query_string}"
+    ip = "127.0.0.1"
+    if server_type in {"apache", "nginx"}:
+        ts = now.strftime("%d/%b/%Y:%H:%M:%S %z")
+        return f'{ip} - - [{ts}] "GET {uri} HTTP/1.1" {status} 123 "-" "{user_agent}"'
+    # iis
+    date = now.strftime("%Y-%m-%d")
+    tm = now.strftime("%H:%M:%S")
+    uri_query = query_string if query_string else "-"
+    return f"{date} {tm} {ip} GET {path} {uri_query} {status} {user_agent}"
 
 
 if __name__ == "__main__":
