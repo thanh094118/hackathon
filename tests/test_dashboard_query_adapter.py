@@ -217,7 +217,7 @@ class TestQueryAdapterAdvancedFeatures:
         with patch.object(mq, "generate_attack_timeline", return_value=rows) as mock_fn:
             results = adapter.get_attack_timeline(bucket_size=5, unit="minute")
 
-        mock_fn.assert_called_once_with(adapter.db, ip=None, bucket_size=5, unit="minute", limit=1000, requests_collection="requests")
+        mock_fn.assert_called_once_with(adapter.db, ip=None, bucket_size=5, unit="minute", limit=1000, requests_collection="requests", cutoff=None)
         assert len(results) == 1
         assert results[0]["attack_type"] == "SQLI"
         assert results[0]["count"] == 5
@@ -240,7 +240,7 @@ class TestQueryAdapterAdvancedFeatures:
         with patch.object(mq, "detect_attack_campaigns", return_value=rows) as mock_fn:
             results = adapter.get_active_campaigns(min_attacks=50, min_attack_types=3)
 
-        mock_fn.assert_called_once_with(adapter.db, min_attacks=50, min_attack_types=3, limit=200, requests_collection="requests")
+        mock_fn.assert_called_once_with(adapter.db, min_attacks=50, min_attack_types=3, limit=200, requests_collection="requests", cutoff=None)
         assert len(results) == 1
         assert results[0]["ip"] == "10.0.0.1"
         assert results[0]["total_attacks"] == 60

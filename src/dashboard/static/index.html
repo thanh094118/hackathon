@@ -265,10 +265,12 @@
                     <span class="material-symbols-outlined text-xl">refresh</span>
                 </button>
                 <div id="timeframe-select-container">
-                    <select id="timeframe-select" class="bg-surface-container-low border border-outline-variant/30 text-on-surface font-label-caps text-xs rounded px-4 py-2 focus:ring-1 focus:ring-primary focus:border-primary outline-none cursor-pointer">
-                        <option value="24h">Last 24 Hours</option>
+                    <select id="timeframe-select" onchange="refreshData()" class="bg-surface-container-low border border-outline-variant/30 text-on-surface font-label-caps text-xs rounded px-4 py-2 focus:ring-1 focus:ring-primary focus:border-primary outline-none cursor-pointer">
+                        <option value="15m">Last 15 Minutes</option>
+                        <option value="1h">Last Hour</option>
+                        <option value="24h" selected>Last 24 Hours</option>
                         <option value="7d">Last 7 Days</option>
-                        <option value="30d">Last 30 Days</option>
+                        <option value="all">All Time</option>
                     </select>
                 </div>
             </div>
@@ -756,7 +758,7 @@
                 if (span) span.style.fontVariationSettings = "'FILL' 1";
 
                 viewTitle.textContent = "Threat Investigator";
-                timeframeContainer.style.display = "none";
+                timeframeContainer.style.display = "block";
 
                 overviewContainer.classList.add("hidden");
                 investigatorContainer.classList.remove("hidden");
@@ -770,7 +772,24 @@
         // Fetch wrapper with error handling
         async function fetchAPI(endpoint) {
             try {
-                const response = await fetch(`${API_BASE}${endpoint}`);
+                let url = `${API_BASE}${endpoint}`;
+                const timeframeSelect = document.getElementById("timeframe-select");
+                const timeframe = timeframeSelect ? timeframeSelect.value : null;
+
+                if (timeframe && (
+                    endpoint === "/api/summary" ||
+                    endpoint.startsWith("/api/timeline") ||
+                    endpoint === "/api/attack-types" ||
+                    endpoint.startsWith("/api/top-ips") ||
+                    endpoint.startsWith("/api/campaigns") ||
+                    endpoint.startsWith("/api/incidents?") ||
+                    endpoint === "/api/incidents"
+                )) {
+                    const separator = url.includes("?") ? "&" : "?";
+                    url += `${separator}timeframe=${encodeURIComponent(timeframe)}`;
+                }
+
+                const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error(`API Error: Status ${response.status}`);
                 }

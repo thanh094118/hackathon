@@ -39,20 +39,20 @@ def get_status():
     return query_engine.status()
 
 @app.get("/api/summary")
-def get_summary():
-    return query_engine.get_soc_summary()
+def get_summary(timeframe: Optional[str] = Query(None)):
+    return query_engine.get_soc_summary(timeframe=timeframe)
 
 @app.get("/api/attack-types")
-def get_attack_types():
-    return query_engine.get_attack_type_distribution()
+def get_attack_types(timeframe: Optional[str] = Query(None)):
+    return query_engine.get_attack_type_distribution(timeframe=timeframe)
 
 @app.get("/api/top-ips")
-def get_top_ips(limit: int = Query(10, ge=1)):
-    return query_engine.get_top_attacking_ips(limit=limit)
+def get_top_ips(limit: int = Query(10, ge=1), timeframe: Optional[str] = Query(None)):
+    return query_engine.get_top_attacking_ips(limit=limit, timeframe=timeframe)
 
 @app.get("/api/timeline")
-def get_timeline(bucket_size: int = Query(5, ge=1), unit: str = "minute"):
-    return query_engine.get_attack_timeline(bucket_size=bucket_size, unit=unit)
+def get_timeline(bucket_size: int = Query(5, ge=1), unit: str = "minute", timeframe: Optional[str] = Query(None)):
+    return query_engine.get_attack_timeline(bucket_size=bucket_size, unit=unit, timeframe=timeframe)
 
 @app.get("/api/blast-radius")
 def get_blast_radius(ip: str):
@@ -61,12 +61,12 @@ def get_blast_radius(ip: str):
     return query_engine.get_ip_blast_radius(ip)
 
 @app.get("/api/campaigns")
-def get_campaigns(min_attacks: int = Query(50, ge=1), min_attack_types: int = Query(3, ge=1)):
-    return query_engine.get_active_campaigns(min_attacks=min_attacks, min_attack_types=min_attack_types)
+def get_campaigns(min_attacks: int = Query(50, ge=1), min_attack_types: int = Query(3, ge=1), timeframe: Optional[str] = Query(None)):
+    return query_engine.get_active_campaigns(min_attacks=min_attacks, min_attack_types=min_attack_types, timeframe=timeframe)
 
 @app.get("/api/incidents")
-def get_incidents(limit: int = Query(100, ge=1), method: str = "All"):
-    return query_engine.get_recent_incidents(limit=limit, method_filter=method)
+def get_incidents(limit: int = Query(100, ge=1), method: str = "All", timeframe: Optional[str] = Query(None)):
+    return query_engine.get_recent_incidents(limit=limit, method_filter=method, timeframe=timeframe)
 
 @app.get("/api/incidents/{incident_id}")
 def get_incident(incident_id: str):

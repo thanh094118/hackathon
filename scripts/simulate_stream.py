@@ -31,6 +31,7 @@ import logging
 import os
 import signal
 import sys
+from datetime import datetime, timezone
 import tempfile
 import threading
 import time
@@ -122,6 +123,8 @@ class Producer(threading.Thread):
             for row in reader:
                 if shutdown_event.is_set():
                     return
+                # Update timestamp to the current system time to simulate real-time ingestion
+                row["timestamp"] = datetime.now(timezone.utc).strftime("%d/%b/%Y:%H:%M:%S %z")
                 self.queue.put(row)
                 self.total_produced += 1
                 if self.total_produced % 500 == 0:
@@ -268,7 +271,13 @@ class Consumer(threading.Thread):
         # Output dir for this batch (only used when debug_local=True)
         output_dir = TEMP_DIR / f"batch_{self.batch_count:06d}_out"
 
+        tmp_path = None
         try:
+            # Create a temporary file to store the batch log lines
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False, encoding="utf-8") as tf:
+                tf.write("\n".join(log_lines) + "\n")
+                tmp_path = Path(tf.name)
+
             # Import here to avoid circular imports at module load time
             from src.main import _run_single_pipeline
 
@@ -286,7 +295,7 @@ class Consumer(threading.Thread):
             return summary
         finally:
             # Cleanup temp log file (keep output dir if debug_local)
-            if tmp_path.exists() and not self.debug_local:
+            if tmp_path and tmp_path.exists() and not self.debug_local:
                 tmp_path.unlink(missing_ok=True)
 
 

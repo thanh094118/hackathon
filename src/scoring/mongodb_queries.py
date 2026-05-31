@@ -263,13 +263,30 @@ def get_attack_type_distribution(
     *,
     requests_collection: str = "requests",
     limit: int = 20,
+    cutoff: Optional[datetime] = None,
 ) -> List[Dict[str, Any]]:
     collection = _collection(db, requests_collection)
     if collection is None:
         return []
 
+    match_query = _malicious_match_query()
+    if cutoff:
+        match_query = {
+            "$and": [
+                match_query,
+                {
+                    "$expr": {
+                        "$gte": [
+                            {"$dateFromString": {"dateString": "$timestamp", "onError": None, "onNull": None}},
+                            cutoff
+                        ]
+                    }
+                }
+            ]
+        }
+
     pipeline = [
-        {"$match": _malicious_match_query()},
+        {"$match": match_query},
         {
             "$group": {
                 "_id": {"$ifNull": ["$attack_type", {"$ifNull": ["$ml_attack_type", "Unknown"]}]},
@@ -291,13 +308,30 @@ def get_top_attacking_ips(
     limit: int = 10,
     *,
     requests_collection: str = "requests",
+    cutoff: Optional[datetime] = None,
 ) -> List[Dict[str, Any]]:
     collection = _collection(db, requests_collection)
     if collection is None:
         return []
 
+    match_query = _malicious_match_query()
+    if cutoff:
+        match_query = {
+            "$and": [
+                match_query,
+                {
+                    "$expr": {
+                        "$gte": [
+                            {"$dateFromString": {"dateString": "$timestamp", "onError": None, "onNull": None}},
+                            cutoff
+                        ]
+                    }
+                }
+            ]
+        }
+
     pipeline = [
-        {"$match": _malicious_match_query()},
+        {"$match": match_query},
         {
             "$group": {
                 "_id": {"$ifNull": ["$source_ip", "$ip", "Unknown"]},
@@ -325,6 +359,7 @@ def detect_attack_campaigns(
     limit: int = 10,
     *,
     requests_collection: str = "requests",
+    cutoff: Optional[datetime] = None,
 ) -> List[Dict[str, Any]]:
     collection = _collection(db, requests_collection)
     if collection is None:
@@ -334,8 +369,24 @@ def detect_attack_campaigns(
     min_types = max(1, _safe_int(min_attack_types, 3))
     max_limit = max(1, _safe_int(limit, 10))
 
+    match_query = _malicious_match_query()
+    if cutoff:
+        match_query = {
+            "$and": [
+                match_query,
+                {
+                    "$expr": {
+                        "$gte": [
+                            {"$dateFromString": {"dateString": "$timestamp", "onError": None, "onNull": None}},
+                            cutoff
+                        ]
+                    }
+                }
+            ]
+        }
+
     pipeline = [
-        {"$match": _malicious_match_query()},
+        {"$match": match_query},
         {
             "$group": {
                 "_id": {"$ifNull": ["$source_ip", "$ip", "Unknown"]},
@@ -447,6 +498,7 @@ def generate_attack_timeline(
     *,
     hours_bucket: Optional[int] = None,
     requests_collection: str = "requests",
+    cutoff: Optional[datetime] = None,
 ) -> List[Dict[str, Any]]:
     collection = _collection(db, requests_collection)
     if collection is None:
@@ -458,6 +510,21 @@ def generate_attack_timeline(
             {"source_ip": str(ip)},
             {"ip": str(ip)}
         ]
+
+    if cutoff:
+        match_query = {
+            "$and": [
+                match_query,
+                {
+                    "$expr": {
+                        "$gte": [
+                            {"$dateFromString": {"dateString": "$timestamp", "onError": None, "onNull": None}},
+                            cutoff
+                        ]
+                    }
+                }
+            ]
+        }
 
     b_size = max(1, _safe_int(hours_bucket if hours_bucket is not None else bucket_size, 1))
     t_unit = str(unit) if hours_bucket is None else "hour"

@@ -27,5 +27,13 @@
   - [x] Render Attack Evolution Timeline as Plotly stacked bar chart.
   - [x] Write unit tests in test_mongodb_integration.py and test_dashboard_query_adapter.py.
   - [x] Verify all test suites pass.
-- [x] Generate the ultimate Next.js frontend specification (`threatlens_ai_ultimate_frontend_spec.md`) integrating visual screen mockups and MongoDB aggregation schemas.
+- [x] Implement real-time timestamp simulation in `scripts/simulate_stream.py` to ensure generated logs match current wall-clock time and display correctly in dashboard live panels.
+- [x] Add dynamic Timeframe Select Filter to the ThreatLens AI SOC dashboard:
+  - [x] Support timeframes: Last 15 Minutes (`15m`), Last Hour (`1h`), Last 24 Hours (`24h`), Last 7 Days (`7d`), and All Time (`all`).
+  - [x] Integrate timeframe filtering into MongoDB query functions (`src/scoring/mongodb_queries.py`).
+  - [x] Update the dashboard query adapter (`src/dashboard/query_adapter.py`) to parse timeframes and apply cutoff constraints.
+  - [x] Expose `timeframe` query parameter across FastAPI REST endpoints (`src/dashboard/api.py`).
+  - [x] Update frontend static files (`src/dashboard/static/index.html`) to dynamically refresh all widgets on timeframe dropdown changes.
+  - [x] Write and verify unit tests (`tests/test_dashboard_query_adapter.py` and `tests/test_dashboard_api.py`).
+  - [x] Verify visual rendering and interaction via browser subagent.
 

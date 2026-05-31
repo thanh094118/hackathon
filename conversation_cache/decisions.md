@@ -29,4 +29,7 @@
   - Timeline bucketing must group by both timestamp bucket and normalized attack type to support multi-series stacked/grouped visualization.
   - Blast Radius URI distribution query must compute percentages at the aggregation layer using `$unwind` on grouped results to minimize downstream transformation overhead.
   - Coordinated Campaign Detection (APT) parameters (min attacks, min attack types) should be completely configurable in the query arguments and UI.
+- Stream Simulator Real-Time Timestamp Alignment:
+  - During stream simulation, static CSV timestamps (from July 2020) are dynamically overridden at the producer-ingestion point with the current UTC system time (to the second) using the standard Apache access log format (`%d/%b/%Y:%H:%M:%S %z`).
+  - This ensures that simulated requests match the wall-clock time at which they are actually processed, keeping them visible inside active real-time dashboard filter boundaries (e.g., "last 15 minutes", "last 24 hours") and allowing the charts to plot live scrolling data.
 

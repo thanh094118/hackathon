@@ -279,6 +279,7 @@ class DashboardQueryAdapter:
         if load_dotenv is not None:
             load_dotenv()
 
+        self._explicit_now = now is not None
         self._now = _ensure_aware_utc(now or datetime.now(timezone.utc))
         self.uri = str(os.getenv("MONGODB_URI", "")).strip()
         self.database_name = (
@@ -309,6 +310,71 @@ class DashboardQueryAdapter:
 
         self._connect()
 
+    def _parse_timeframe(self, timeframe: Optional[str]) -> Optional[datetime]:
+        if not timeframe or timeframe.lower() in ("all", "all_time", ""):
+            return None
+        
+        base_time = self._now if self._explicit_now else datetime.now(timezone.utc)
+        
+        tf = timeframe.lower().strip()
+        try:
+            if tf.endswith("m"):
+                minutes = int(tf[:-1])
+                return base_time - timedelta(minutes=minutes)
+            elif tf.endswith("h"):
+                hours = int(tf[:-1])
+                return base_time - timedelta(hours=hours)
+            elif tf.endswith("d"):
+                days = int(tf[:-1])
+                return base_time - timedelta(days=days)
+        except Exception:
+            pass
+        return None
+
+    def _build_timeframe_match(self, timeframe: Optional[str]) -> Dict[str, Any]:
+        cutoff = self._parse_timeframe(timeframe)
+        if not cutoff:
+            return {}
+        return {
+            "$expr": {
+                "$gte": [
+                    {
+                        "$dateFromString": {
+                            "dateString": "$timestamp",
+                            "onError": None,
+                            "onNull": None
+                        }
+                    },
+                    cutoff
+                ]
+            }
+        }
+
+    def _filter_mock_by_timeframe(self, items: List[Dict[str, Any]], timeframe: Optional[str]) -> List[Dict[str, Any]]:
+        cutoff = self._parse_timeframe(timeframe)
+        if not cutoff:
+            return items
+        
+        filtered = []
+        for item in items:
+            ts_str = item.get("timestamp")
+            if not ts_str:
+                continue
+            try:
+                ts_dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                if ts_dt >= cutoff:
+                    filtered.append(item)
+            except Exception:
+                filtered.append(item)
+        return filtered
+
+    def _combine_queries(self, q1: Dict[str, Any], q2: Dict[str, Any]) -> Dict[str, Any]:
+        if not q1:
+            return q2
+        if not q2:
+            return q1
+        return {"$and": [q1, q2]}
+
     def status(self) -> Dict[str, Any]:
         payload = dict(self._status)
         payload["using_mock"] = self.is_mock_mode()
@@ -323,12 +389,12 @@ class DashboardQueryAdapter:
     # Overview tab query methods
     # -------------------------
 
-    def get_soc_summary(self) -> Dict[str, int]:
+    def get_soc_summary(self, timeframe: Optional[str] = None) -> Dict[str, int]:
         if self.is_mock_mode():
-            requests = self._mock["requests"]
-            incidents = self._mock["incidents"]
+            requests = self._filter_mock_by_timeframe(self._mock["requests"], timeframe)
+            incidents = self._filter_mock_by_timeframe(self._mock["incidents"], timeframe)
             malicious = [row for row in requests if _is_malicious_record(row)]
-            campaigns = self.get_active_campaigns(min_attacks=10)
+            campaigns = self.get_active_campaigns(min_attacks=10, timeframe=timeframe)
             high_incidents = [
                 row
                 for row in incidents
@@ -343,34 +409,42 @@ class DashboardQueryAdapter:
                 "high_severity_incidents": len(high_incidents),
             }
 
-        requests_count = self._count_documents(self.requests_collection_name, {})
-        malicious_count = self._count_documents(self.requests_collection_name, self._malicious_match_query())
+        tf_match = self._build_timeframe_match(timeframe)
 
-        incident_count = self._count_documents(self.incidents_collection_name, {})
+        requests_count = self._count_documents(self.requests_collection_name, tf_match)
+        malicious_count = self._count_documents(
+            self.requests_collection_name,
+            self._combine_queries(tf_match, self._malicious_match_query())
+        )
+
+        incident_count = self._count_documents(self.incidents_collection_name, tf_match)
         if incident_count == 0:
             incident_count = malicious_count
 
         high_severity = self._count_documents(
             self.incidents_collection_name,
-            {"severity": {"$in": ["high", "critical", "HIGH", "CRITICAL"]}},
+            self._combine_queries(tf_match, {"severity": {"$in": ["high", "critical", "HIGH", "CRITICAL"]}}),
         )
         if high_severity == 0:
             high_severity = self._count_documents(
                 self.requests_collection_name,
-                {
-                    "$and": [
-                        self._malicious_match_query(),
-                        {
-                            "$or": [
-                                {"severity": {"$in": ["high", "critical", "HIGH", "CRITICAL"]}},
-                                {"risk_score": {"$gte": 80}},
-                            ]
-                        },
-                    ]
-                },
+                self._combine_queries(
+                    tf_match,
+                    {
+                        "$and": [
+                            self._malicious_match_query(),
+                            {
+                                "$or": [
+                                    {"severity": {"$in": ["high", "critical", "HIGH", "CRITICAL"]}},
+                                    {"risk_score": {"$gte": 80}},
+                                ]
+                            },
+                        ]
+                    }
+                ),
             )
 
-        campaigns = self.get_active_campaigns(min_attacks=10)
+        campaigns = self.get_active_campaigns(min_attacks=10, timeframe=timeframe)
 
         return {
             "total_requests": requests_count,
@@ -380,10 +454,11 @@ class DashboardQueryAdapter:
             "high_severity_incidents": high_severity,
         }
 
-    def get_attack_type_distribution(self) -> List[Dict[str, Any]]:
+    def get_attack_type_distribution(self, timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.is_mock_mode():
+            requests = self._filter_mock_by_timeframe(self._mock["requests"], timeframe)
             counts: Dict[str, int] = {}
-            for record in self._mock["requests"]:
+            for record in requests:
                 if not _is_malicious_record(record):
                     continue
                 attack_type = _normalize_attack_type(record.get("attack_type"))
@@ -393,12 +468,13 @@ class DashboardQueryAdapter:
                 for attack_type, count in sorted(counts.items(), key=lambda item: item[1], reverse=True)
             ]
 
-        rows = self._query_attack_type_distribution()
+        rows = self._query_attack_type_distribution(timeframe=timeframe)
         if not rows and self.requests_collection_name:
             # Keep a read-only local fallback when centralized query helpers are unavailable.
+            tf_match = self._build_timeframe_match(timeframe)
             records = self._find_many(
                 self.requests_collection_name,
-                self._malicious_match_query(),
+                self._combine_queries(tf_match, self._malicious_match_query()),
                 projection={"attack_type": 1, "ml_attack_type": 1, "prediction.attack_type": 1, "risk_score": 1, "prediction.label": 1, "ml_label": 1, "ml_should_alert": 1, "should_alert": 1},
                 limit=20000,
                 sort=None,
@@ -423,12 +499,13 @@ class DashboardQueryAdapter:
         output.sort(key=lambda item: int(item.get("count", 0)), reverse=True)
         return output
 
-    def get_top_attacking_ips(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_top_attacking_ips(self, limit: int = 10, timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         limit = max(1, int(limit))
 
         if self.is_mock_mode():
+            requests = self._filter_mock_by_timeframe(self._mock["requests"], timeframe)
             grouped: Dict[str, Dict[str, Any]] = {}
-            for row in self._mock["requests"]:
+            for row in requests:
                 if not _is_malicious_record(row):
                     continue
                 normalized = _normalize_request_record(row)
@@ -456,12 +533,13 @@ class DashboardQueryAdapter:
 
             return self._finalize_top_ips(list(grouped.values()), limit)
 
-        rows = self._query_top_attacking_ips(limit=limit)
+        rows = self._query_top_attacking_ips(limit=limit, timeframe=timeframe)
         if not rows and self.requests_collection_name:
             # Keep a read-only fallback to avoid dashboard failures when centralized helper is unavailable.
+            tf_match = self._build_timeframe_match(timeframe)
             records = self._find_many(
                 self.requests_collection_name,
-                self._malicious_match_query(),
+                self._combine_queries(tf_match, self._malicious_match_query()),
                 projection={"ip": 1, "source_ip": 1, "client_ip": 1, "attack_type": 1, "ml_attack_type": 1, "uri": 1, "timestamp": 1, "risk_score": 1, "prediction": 1, "ml_label": 1, "ml_should_alert": 1, "should_alert": 1},
                 limit=20000,
                 sort=[("timestamp", -1)],
@@ -513,14 +591,15 @@ class DashboardQueryAdapter:
 
         return self._finalize_top_ips(mapped, limit)
 
-    def get_attack_timeline(self, bucket_size: int = 5, unit: str = "minute") -> List[Dict[str, Any]]:
+    def get_attack_timeline(self, bucket_size: int = 5, unit: str = "minute", timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.is_mock_mode():
-            return self._build_timeline_from_records(self._mock["requests"])
+            requests = self._filter_mock_by_timeframe(self._mock["requests"], timeframe)
+            return self._build_timeline_from_records(requests)
 
         if not self.requests_collection_name:
             return []
 
-        rows = self._query_attack_timeline(bucket_size=bucket_size, unit=unit)
+        rows = self._query_attack_timeline(bucket_size=bucket_size, unit=unit, timeframe=timeframe)
         if rows:
             timeline: List[Dict[str, Any]] = []
             for row in rows:
@@ -539,9 +618,10 @@ class DashboardQueryAdapter:
                 timeline.sort(key=lambda item: (item.get("timestamp", ""), item.get("attack_type", "")))
                 return timeline
 
+        tf_match = self._build_timeframe_match(timeframe)
         recent_records = self._find_many(
             self.requests_collection_name,
-            self._malicious_match_query(),
+            self._combine_queries(tf_match, self._malicious_match_query()),
             projection={"timestamp": 1, "attack_type": 1, "prediction": 1, "risk_score": 1, "ml_attack_type": 1},
             limit=10000,
             sort=[("timestamp", 1)],
@@ -590,12 +670,12 @@ class DashboardQueryAdapter:
             for row in rows
         ]
 
-    def get_active_campaigns(self, min_attacks: int = 50, min_attack_types: int = 3) -> List[Dict[str, Any]]:
+    def get_active_campaigns(self, min_attacks: int = 50, min_attack_types: int = 3, timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         threshold = max(1, int(min_attacks))
         min_types = max(1, int(min_attack_types))
 
         if not self.is_mock_mode():
-            rows = self._query_attack_campaigns(min_attacks=threshold, min_attack_types=min_types, limit=200)
+            rows = self._query_attack_campaigns(min_attacks=threshold, min_attack_types=min_types, limit=200, timeframe=timeframe)
             if rows:
                 campaigns: List[Dict[str, Any]] = []
                 for row in rows:
@@ -638,7 +718,7 @@ class DashboardQueryAdapter:
                 campaigns.sort(key=lambda item: int(item.get("total_attacks", 0)), reverse=True)
                 return campaigns
 
-        top_ips = self.get_top_attacking_ips(limit=200)
+        top_ips = self.get_top_attacking_ips(limit=200, timeframe=timeframe)
 
         campaigns: List[Dict[str, Any]] = []
         for row in top_ips:
@@ -670,13 +750,14 @@ class DashboardQueryAdapter:
     # Investigation tab query methods
     # -----------------------------
 
-    def get_recent_incidents(self, limit: int = 100, method_filter: str = "All") -> List[Dict[str, Any]]:
+    def get_recent_incidents(self, limit: int = 100, method_filter: str = "All", timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         limit = max(1, int(limit))
 
         if self.is_mock_mode():
+            incidents = self._filter_mock_by_timeframe(self._mock["incidents"], timeframe)
             rows = [
                 _normalize_request_record(record)
-                for record in self._mock["incidents"]
+                for record in incidents
             ]
             if method_filter != "All":
                 filtered = []
@@ -693,6 +774,7 @@ class DashboardQueryAdapter:
             rows.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
             return rows[:limit]
 
+        tf_match = self._build_timeframe_match(timeframe)
         query: Dict[str, Any] = {}
         if method_filter != "All":
             has_rules_cond = {
@@ -714,6 +796,8 @@ class DashboardQueryAdapter:
             elif method_filter == "Hybrid Only":
                 query = {"$and": [has_rules_cond, has_ml_cond]}
 
+        query = self._combine_queries(tf_match, query)
+
         incident_records = self._find_many(
             self.incidents_collection_name,
             query,
@@ -730,7 +814,9 @@ class DashboardQueryAdapter:
 
         derived_query = self._malicious_match_query()
         if query:
-            derived_query = {"$and": [derived_query, query]}
+            derived_query = self._combine_queries(derived_query, query)
+        else:
+            derived_query = self._combine_queries(tf_match, derived_query)
 
         derived = self._find_many(
             self.requests_collection_name,
@@ -939,18 +1025,20 @@ class DashboardQueryAdapter:
         except Exception:
             return []
 
-    def _query_attack_type_distribution(self) -> List[Dict[str, Any]]:
+    def _query_attack_type_distribution(self, timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.db is None or mongodb_queries is None:
             return []
         if not hasattr(mongodb_queries, "get_attack_type_distribution"):
             return []
+        cutoff = self._parse_timeframe(timeframe)
         try:
             if self.requests_collection_name:
                 return mongodb_queries.get_attack_type_distribution(
                     self.db,
                     requests_collection=self.requests_collection_name,
+                    cutoff=cutoff,
                 )
-            return mongodb_queries.get_attack_type_distribution(self.db)
+            return mongodb_queries.get_attack_type_distribution(self.db, cutoff=cutoff)
         except TypeError:
             try:
                 return mongodb_queries.get_attack_type_distribution(self.db)
@@ -959,19 +1047,21 @@ class DashboardQueryAdapter:
         except Exception:
             return []
 
-    def _query_top_attacking_ips(self, limit: int) -> List[Dict[str, Any]]:
+    def _query_top_attacking_ips(self, limit: int, timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.db is None or mongodb_queries is None:
             return []
         if not hasattr(mongodb_queries, "get_top_attacking_ips"):
             return []
+        cutoff = self._parse_timeframe(timeframe)
         try:
             if self.requests_collection_name:
                 return mongodb_queries.get_top_attacking_ips(
                     self.db,
                     limit=limit,
                     requests_collection=self.requests_collection_name,
+                    cutoff=cutoff,
                 )
-            return mongodb_queries.get_top_attacking_ips(self.db, limit=limit)
+            return mongodb_queries.get_top_attacking_ips(self.db, limit=limit, cutoff=cutoff)
         except TypeError:
             try:
                 return mongodb_queries.get_top_attacking_ips(self.db, limit=limit)
@@ -980,11 +1070,12 @@ class DashboardQueryAdapter:
         except Exception:
             return []
 
-    def _query_attack_timeline(self, bucket_size: int = 5, unit: str = "minute") -> List[Dict[str, Any]]:
+    def _query_attack_timeline(self, bucket_size: int = 5, unit: str = "minute", timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.db is None or mongodb_queries is None:
             return []
         if not hasattr(mongodb_queries, "generate_attack_timeline"):
             return []
+        cutoff = self._parse_timeframe(timeframe)
         try:
             if self.requests_collection_name:
                 return mongodb_queries.generate_attack_timeline(
@@ -994,8 +1085,9 @@ class DashboardQueryAdapter:
                     unit=unit,
                     limit=1000,
                     requests_collection=self.requests_collection_name,
+                    cutoff=cutoff,
                 )
-            return mongodb_queries.generate_attack_timeline(self.db, ip=None, bucket_size=bucket_size, unit=unit, limit=1000)
+            return mongodb_queries.generate_attack_timeline(self.db, ip=None, bucket_size=bucket_size, unit=unit, limit=1000, cutoff=cutoff)
         except TypeError:
             try:
                 return mongodb_queries.generate_attack_timeline(self.db, ip=None, hours_bucket=1, limit=1000)
@@ -1020,11 +1112,12 @@ class DashboardQueryAdapter:
         except Exception:
             return []
 
-    def _query_attack_campaigns(self, *, min_attacks: int, min_attack_types: int = 3, limit: int) -> List[Dict[str, Any]]:
+    def _query_attack_campaigns(self, *, min_attacks: int, min_attack_types: int = 3, limit: int, timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.db is None or mongodb_queries is None:
             return []
         if not hasattr(mongodb_queries, "detect_attack_campaigns"):
             return []
+        cutoff = self._parse_timeframe(timeframe)
         try:
             if self.requests_collection_name:
                 return mongodb_queries.detect_attack_campaigns(
@@ -1033,8 +1126,9 @@ class DashboardQueryAdapter:
                     min_attack_types=min_attack_types,
                     limit=limit,
                     requests_collection=self.requests_collection_name,
+                    cutoff=cutoff,
                 )
-            return mongodb_queries.detect_attack_campaigns(self.db, min_attacks=min_attacks, min_attack_types=min_attack_types, limit=limit)
+            return mongodb_queries.detect_attack_campaigns(self.db, min_attacks=min_attacks, min_attack_types=min_attack_types, limit=limit, cutoff=cutoff)
         except TypeError:
             try:
                 return mongodb_queries.detect_attack_campaigns(self.db, min_attacks=min_attacks, limit=limit)

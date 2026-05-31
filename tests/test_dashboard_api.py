@@ -77,3 +77,23 @@ def test_api_incident_detail_not_found():
 def test_api_index_html():
     response = client.get("/")
     assert response.status_code == 200
+
+def test_api_timeframe_parameters():
+    for timeframe in ["15m", "1h", "24h", "7d", "all"]:
+        response = client.get(f"/api/summary?timeframe={timeframe}")
+        assert response.status_code == 200
+        
+        response = client.get(f"/api/attack-types?timeframe={timeframe}")
+        assert response.status_code == 200
+        
+        response = client.get(f"/api/top-ips?limit=5&timeframe={timeframe}")
+        assert response.status_code == 200
+        
+        response = client.get(f"/api/timeline?bucket_size=5&unit=minute&timeframe={timeframe}")
+        assert response.status_code == 200
+        
+        response = client.get(f"/api/campaigns?min_attacks=2&min_attack_types=1&timeframe={timeframe}")
+        assert response.status_code == 200
+        
+        response = client.get(f"/api/incidents?limit=10&timeframe={timeframe}")
+        assert response.status_code == 200

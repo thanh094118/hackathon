@@ -35,3 +35,16 @@
 
 - **ThreatLens AI Ultimate Next.js Frontend Specification**:
   - Generated `threatlens_ai_ultimate_frontend_spec.md` with complete layouts, Tailwind styles, interactive Recharts configurations, data schemas, API routes, and TSX component implementations matching the user's cyberpunk design assets.
+
+- **Stream Simulator Real-Time Timestamp Processing**:
+  - Fixed a NameError bug in `scripts/simulate_stream.py` where `tmp_path` was referenced without being defined. Refactored the consumer batch file writing to use `tempfile.NamedTemporaryFile` and added a robust `finally` cleanup block.
+  - Implemented dynamic real-time timestamp simulation in `Producer._read_csv`. It now rewrites the static 2020 timestamps from the raw CAPEC CSV to the current wall-clock UTC time (formatted in standard Apache access log format) at the moment of queuing.
+  - This ensures that simulated requests match the current timeline, enabling correct filtering and rendering in real-time dashboards (e.g. "last 15 minutes" filters).
+  - Wrote a new unit test suite `tests/test_stream_simulator.py` to verify the timestamp override logic. Verified all 228 test cases across the codebase pass successfully.
+
+- **Dashboard Dynamic Timeframe Dropdown (SIEM-like behavior)**:
+  - Added support for dynamic timeframe selection dropdown at the top of the dashboard containing options: Last 15 Minutes (`15m`), Last Hour (`1h`), Last 24 Hours (`24h`), Last 7 Days (`7d`), and All Time (`all`).
+  - Updated all REST endpoints, MongoDB query wrappers, and the frontend JS API fetch layer to seamlessly propagate this parameter, updating charts and count cards in real time.
+  - Verified that changing the dropdown correctly filters out mock/live database queries to match target time ranges.
+  - Verified that all unit tests and API integration tests pass with 100% success.
+  - Visual rendering and interaction validated successfully via browser subagent.
