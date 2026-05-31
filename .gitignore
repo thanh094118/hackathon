@@ -29,3 +29,5 @@ a.puml
 docs/detailed description.pdf
 output_test/
 *.txt
+venv
+.venv
