@@ -1,5 +1,12 @@
 # Decisions (2026-05-30)
 
+- Alert notifications remain loosely coupled in `src/alerts/`; no parser, normalizer, detection, scoring, exporter, or main pipeline integration is implemented yet.
+- Alert delivery must return `AlertSendResult` objects and isolate channel failures so one failed notifier does not crash or block other channels.
+- Alert dry-run mode should not require real channel credentials and must avoid network calls.
+- Real-time alert integration should go through `src/notifications/alerts.py`, which wraps `src.alerts`; raw Email, Telegram, and Slack delivery code must remain only in `src/alerts`.
+- MongoDB exporter alert hooks should run only for the `incidents` collection to avoid duplicate notifications from all-request exports.
+- Attack Simulator target-url mode must only allow localhost and hosts explicitly listed in `SIMULATOR_ALLOWED_HOSTS`.
+
 - Centralize dashboard complex MongoDB logic in `src/scoring/mongodb_queries.py` and keep `src/dashboard/query_adapter.py` focused on:
   - env/mode handling
   - connection/fallback behavior
