@@ -36,6 +36,40 @@ def _malicious_match_query() -> Dict[str, Any]:
     }
 
 
+def _timeframe_filter(cutoff: Any) -> Dict[str, Any]:
+    if not cutoff:
+        return {}
+    return {
+        "$or": [
+            {
+                "$and": [
+                    {"timestamp": {"$type": "date"}},
+                    {"timestamp": {"$gte": cutoff}}
+                ]
+            },
+            {
+                "$and": [
+                    {"timestamp": {"$type": "string"}},
+                    {
+                        "$expr": {
+                            "$gte": [
+                                {
+                                    "$dateFromString": {
+                                        "dateString": "$timestamp",
+                                        "onError": None,
+                                        "onNull": None
+                                    }
+                                },
+                                cutoff
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+
 def find_similar_attack_patterns(
     collection,
     query_vector: List[float],
@@ -274,14 +308,7 @@ def get_attack_type_distribution(
         match_query = {
             "$and": [
                 match_query,
-                {
-                    "$expr": {
-                        "$gte": [
-                            {"$dateFromString": {"dateString": "$timestamp", "onError": None, "onNull": None}},
-                            cutoff
-                        ]
-                    }
-                }
+                _timeframe_filter(cutoff)
             ]
         }
 
@@ -319,14 +346,7 @@ def get_top_attacking_ips(
         match_query = {
             "$and": [
                 match_query,
-                {
-                    "$expr": {
-                        "$gte": [
-                            {"$dateFromString": {"dateString": "$timestamp", "onError": None, "onNull": None}},
-                            cutoff
-                        ]
-                    }
-                }
+                _timeframe_filter(cutoff)
             ]
         }
 
@@ -374,14 +394,7 @@ def detect_attack_campaigns(
         match_query = {
             "$and": [
                 match_query,
-                {
-                    "$expr": {
-                        "$gte": [
-                            {"$dateFromString": {"dateString": "$timestamp", "onError": None, "onNull": None}},
-                            cutoff
-                        ]
-                    }
-                }
+                _timeframe_filter(cutoff)
             ]
         }
 
@@ -515,14 +528,7 @@ def generate_attack_timeline(
         match_query = {
             "$and": [
                 match_query,
-                {
-                    "$expr": {
-                        "$gte": [
-                            {"$dateFromString": {"dateString": "$timestamp", "onError": None, "onNull": None}},
-                            cutoff
-                        ]
-                    }
-                }
+                _timeframe_filter(cutoff)
             ]
         }
 

@@ -336,18 +336,33 @@ class DashboardQueryAdapter:
         if not cutoff:
             return {}
         return {
-            "$expr": {
-                "$gte": [
-                    {
-                        "$dateFromString": {
-                            "dateString": "$timestamp",
-                            "onError": None,
-                            "onNull": None
+            "$or": [
+                {
+                    "$and": [
+                        {"timestamp": {"$type": "date"}},
+                        {"timestamp": {"$gte": cutoff}}
+                    ]
+                },
+                {
+                    "$and": [
+                        {"timestamp": {"$type": "string"}},
+                        {
+                            "$expr": {
+                                "$gte": [
+                                    {
+                                        "$dateFromString": {
+                                            "dateString": "$timestamp",
+                                            "onError": None,
+                                            "onNull": None
+                                        }
+                                    },
+                                    cutoff
+                                ]
+                            }
                         }
-                    },
-                    cutoff
-                ]
-            }
+                    ]
+                }
+            ]
         }
 
     def _filter_mock_by_timeframe(self, items: List[Dict[str, Any]], timeframe: Optional[str]) -> List[Dict[str, Any]]:

@@ -53,8 +53,8 @@ def test_mongodb_exporter_bulk_upsert():
         exporter.connect()
         
         records = [
-            {"event_id": "evt1", "uri": "/index.php", "risk_score": 2.0},
-            {"event_id": "evt2", "uri": "/admin", "risk_score": 8.0}
+            {"event_id": "evt1", "uri": "/index.php", "risk_score": 2.0, "timestamp": "2026-05-30T10:00:00Z"},
+            {"event_id": "evt2", "uri": "/admin", "risk_score": 8.0, "timestamp": "2026-05-30 11:00:00"}
         ]
         
         exporter.export(records)
@@ -67,8 +67,16 @@ def test_mongodb_exporter_bulk_upsert():
         # Check first update operation parameters
         op1 = calls[0]
         assert op1._filter == {"event_id": "evt1"}
-        assert op1._doc == {"$set": {"event_id": "evt1", "uri": "/index.php", "risk_score": 2.0}}
+        assert op1._doc["$set"]["event_id"] == "evt1"
+        assert op1._doc["$set"]["uri"] == "/index.php"
+        from datetime import datetime
+        assert isinstance(op1._doc["$set"]["timestamp"], datetime)
         assert op1._upsert is True
+
+        # Check second update operation parameters
+        op2 = calls[1]
+        assert op2._filter == {"event_id": "evt2"}
+        assert isinstance(op2._doc["$set"]["timestamp"], datetime)
 
 
 def test_find_similar_attack_patterns():
