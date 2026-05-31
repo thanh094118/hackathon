@@ -29,6 +29,5 @@ docs/detailed description.pdf
 output_test/
 *.txt
 node_modules/
-src/simulator/
 src/notifications/
 package.json
