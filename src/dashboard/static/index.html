@@ -218,6 +218,12 @@
                     <span class="font-label-caps text-label-caps">Threat Investigator</span>
                 </a>
             </li>
+            <li>
+                <a id="nav-settings" href="#settings" class="flex items-center gap-3 px-4 py-3 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all duration-200 cursor-pointer border-l-4 border-transparent">
+                    <span class="material-symbols-outlined">settings</span>
+                    <span class="font-label-caps text-label-caps">Settings</span>
+                </a>
+            </li>
             <li class="mt-auto mb-4">
                 <div class="glass-panel bg-surface-container-low/50 p-3 rounded-lg mx-2">
                     <div class="flex items-center gap-2 mb-1">
@@ -649,6 +655,76 @@
                     </div>
                 </section>
             </div>
+
+            <!-- VIEW 3: SETTINGS -->
+            <div id="view-settings-container" class="hidden space-y-6 max-w-5xl">
+                <div class="glass-panel bg-surface-container-lowest/50 border border-outline-variant/20 rounded-lg p-6">
+                    <div class="flex items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h2 class="font-headline-md text-xl text-on-surface">Alert Credentials</h2>
+                            <p id="settings-source" class="font-data-mono text-xs text-on-surface-variant mt-1">Loading alert settings...</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="testAlertSettings()" class="bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/30 text-on-surface font-label-caps text-xs px-4 py-2 rounded transition-colors flex items-center gap-2 active:scale-95">
+                                <span class="material-symbols-outlined text-sm">outgoing_mail</span>
+                                TEST
+                            </button>
+                            <button onclick="saveAlertSettings()" class="bg-primary text-on-primary font-label-caps text-xs px-4 py-2 rounded hover:bg-primary-fixed-dim transition-colors flex items-center gap-2 active:scale-95">
+                                <span class="material-symbols-outlined text-sm">save</span>
+                                SAVE
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <section class="glass-panel bg-surface-container-low/60 rounded-lg p-4">
+                            <h3 class="font-label-caps text-xs text-primary mb-4">GLOBAL</h3>
+                            <label class="flex items-center gap-3 mb-3 text-sm"><input id="settings-alerts-enabled" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Enable alerts</label>
+                            <label class="flex items-center gap-3 mb-3 text-sm"><input id="settings-dry-run" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Dry run mode</label>
+                            <label class="block font-label-caps text-[10px] text-outline mb-1">Channels</label>
+                            <div class="flex flex-wrap gap-3 mb-3 text-sm">
+                                <label class="flex items-center gap-2"><input id="settings-channel-email" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Email</label>
+                                <label class="flex items-center gap-2"><input id="settings-channel-telegram" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Telegram</label>
+                                <label class="flex items-center gap-2"><input id="settings-channel-slack" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Slack</label>
+                            </div>
+                            <label class="block font-label-caps text-[10px] text-outline mb-1">Dashboard URL</label>
+                            <input id="settings-dashboard-url" type="text" class="w-full bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm text-on-surface" placeholder="http://127.0.0.1:8501">
+                        </section>
+
+                        <section class="glass-panel bg-surface-container-low/60 rounded-lg p-4">
+                            <h3 class="font-label-caps text-xs text-primary mb-4">EMAIL</h3>
+                            <label class="flex items-center gap-3 mb-3 text-sm"><input id="settings-email-enabled" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Enable email</label>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <input id="settings-smtp-host" type="text" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="SMTP host">
+                                <input id="settings-smtp-port" type="number" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="587">
+                                <input id="settings-smtp-username" type="text" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="SMTP username">
+                                <input id="settings-smtp-password" type="password" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="New password">
+                                <input id="settings-smtp-from" type="email" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="From address">
+                                <input id="settings-smtp-to" type="email" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="To address">
+                            </div>
+                            <label class="flex items-center gap-3 mt-3 text-sm"><input id="settings-smtp-tls" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Use TLS</label>
+                            <p id="settings-smtp-password-status" class="font-data-mono text-[10px] text-outline mt-2">Password not configured</p>
+                        </section>
+
+                        <section class="glass-panel bg-surface-container-low/60 rounded-lg p-4">
+                            <h3 class="font-label-caps text-xs text-primary mb-4">TELEGRAM</h3>
+                            <label class="flex items-center gap-3 mb-3 text-sm"><input id="settings-telegram-enabled" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Enable Telegram</label>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <input id="settings-telegram-token" type="password" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="New bot token">
+                                <input id="settings-telegram-chat" type="text" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="Chat ID">
+                            </div>
+                            <p id="settings-telegram-token-status" class="font-data-mono text-[10px] text-outline mt-2">Token not configured</p>
+                        </section>
+
+                        <section class="glass-panel bg-surface-container-low/60 rounded-lg p-4">
+                            <h3 class="font-label-caps text-xs text-primary mb-4">SLACK</h3>
+                            <label class="flex items-center gap-3 mb-3 text-sm"><input id="settings-slack-enabled" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Enable Slack</label>
+                            <input id="settings-slack-webhook" type="password" class="w-full bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="New webhook URL">
+                            <p id="settings-slack-webhook-status" class="font-data-mono text-[10px] text-outline mt-2">Webhook not configured</p>
+                        </section>
+                    </div>
+                </div>
+            </div>
             
         </div>
     </main>
@@ -729,14 +805,16 @@
             const hash = window.location.hash || "#overview";
             const navOverview = document.getElementById("nav-overview");
             const navInvestigator = document.getElementById("nav-investigator");
+            const navSettings = document.getElementById("nav-settings");
             const viewTitle = document.getElementById("view-title");
             const timeframeContainer = document.getElementById("timeframe-select-container");
 
             const overviewContainer = document.getElementById("view-overview-container");
             const investigatorContainer = document.getElementById("view-investigator-container");
+            const settingsContainer = document.getElementById("view-settings-container");
 
             // Reset navigation links active class
-            [navOverview, navInvestigator].forEach(el => {
+            [navOverview, navInvestigator, navSettings].forEach(el => {
                 el.className = "flex items-center gap-3 px-4 py-3 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all duration-200 cursor-pointer border-l-4 border-transparent";
                 const span = el.querySelector("span");
                 if (span) span.style.fontVariationSettings = "'FILL' 0";
@@ -752,6 +830,7 @@
 
                 overviewContainer.classList.remove("hidden");
                 investigatorContainer.classList.add("hidden");
+                settingsContainer.classList.add("hidden");
 
                 // Initialize/render overview charts
                 initOverviewCharts();
@@ -765,9 +844,23 @@
 
                 overviewContainer.classList.add("hidden");
                 investigatorContainer.classList.remove("hidden");
+                settingsContainer.classList.add("hidden");
 
                 // Load investigator list
                 loadIncidentFeed();
+            } else if (hash === "#settings") {
+                navSettings.className = "flex items-center gap-3 px-4 py-3 rounded text-primary bg-primary/10 border-l-4 border-primary transition-all duration-200 cursor-pointer";
+                const span = navSettings.querySelector("span");
+                if (span) span.style.fontVariationSettings = "'FILL' 1";
+
+                viewTitle.textContent = "Settings";
+                timeframeContainer.style.display = "none";
+
+                overviewContainer.classList.add("hidden");
+                investigatorContainer.classList.add("hidden");
+                settingsContainer.classList.remove("hidden");
+
+                loadAlertSettings();
             }
         }
         window.addEventListener("hashchange", routeView);
@@ -809,8 +902,147 @@
             await loadConnectionStatus();
             if (window.location.hash === "#investigator") {
                 await loadIncidentFeed();
+            } else if (window.location.hash === "#settings") {
+                await loadAlertSettings();
             } else {
                 await initOverviewCharts();
+            }
+        }
+
+        function setChecked(id, value) {
+            const el = document.getElementById(id);
+            if (el) el.checked = Boolean(value);
+        }
+
+        function setValue(id, value) {
+            const el = document.getElementById(id);
+            if (el) el.value = value == null ? "" : value;
+        }
+
+        function getValue(id) {
+            const el = document.getElementById(id);
+            return el ? el.value.trim() : "";
+        }
+
+        async function loadAlertSettings() {
+            try {
+                const settings = await fetchAPI("/api/settings/alerts");
+                const encryption = settings.encryption || {};
+                const encryptionLabel = encryption.valid ? "Encryption key valid" : (encryption.message || "Encryption key unavailable");
+                document.getElementById("settings-source").textContent = `Source: ${settings.source || "unknown"} | ${encryptionLabel}${settings.updated_at ? " | Updated: " + settings.updated_at : ""}`;
+
+                setChecked("settings-alerts-enabled", settings.alerts_enabled);
+                setChecked("settings-dry-run", settings.dry_run);
+                setChecked("settings-channel-email", (settings.channels || []).includes("email"));
+                setChecked("settings-channel-telegram", (settings.channels || []).includes("telegram"));
+                setChecked("settings-channel-slack", (settings.channels || []).includes("slack"));
+                setValue("settings-dashboard-url", settings.dashboard_url);
+
+                const email = settings.email || {};
+                setChecked("settings-email-enabled", email.enabled);
+                setValue("settings-smtp-host", email.smtp_host);
+                setValue("settings-smtp-port", email.smtp_port || 587);
+                setValue("settings-smtp-username", email.smtp_username);
+                setValue("settings-smtp-password", "");
+                setValue("settings-smtp-from", email.smtp_from);
+                setValue("settings-smtp-to", email.smtp_to);
+                setChecked("settings-smtp-tls", email.smtp_use_tls !== false);
+                document.getElementById("settings-smtp-password-status").textContent = email.smtp_password_set ? "Password configured" : "Password not configured";
+
+                const telegram = settings.telegram || {};
+                setChecked("settings-telegram-enabled", telegram.enabled);
+                setValue("settings-telegram-token", "");
+                setValue("settings-telegram-chat", telegram.chat_id);
+                document.getElementById("settings-telegram-token-status").textContent = telegram.bot_token_set ? "Bot token configured" : "Token not configured";
+
+                const slack = settings.slack || {};
+                setChecked("settings-slack-enabled", slack.enabled);
+                setValue("settings-slack-webhook", "");
+                document.getElementById("settings-slack-webhook-status").textContent = slack.webhook_url_set ? "Webhook configured" : "Webhook not configured";
+            } catch (error) {
+                showToast("Settings Error", "Unable to load alert settings.", "error", "error");
+            }
+        }
+
+        function collectAlertSettingsPayload() {
+            const channels = [];
+            if (document.getElementById("settings-channel-email").checked) channels.push("email");
+            if (document.getElementById("settings-channel-telegram").checked) channels.push("telegram");
+            if (document.getElementById("settings-channel-slack").checked) channels.push("slack");
+
+            const payload = {
+                alerts_enabled: document.getElementById("settings-alerts-enabled").checked,
+                dry_run: document.getElementById("settings-dry-run").checked,
+                channels,
+                dashboard_url: getValue("settings-dashboard-url") || null,
+                email: {
+                    enabled: document.getElementById("settings-email-enabled").checked,
+                    smtp_host: getValue("settings-smtp-host") || null,
+                    smtp_port: Number(getValue("settings-smtp-port") || 587),
+                    smtp_username: getValue("settings-smtp-username") || null,
+                    smtp_from: getValue("settings-smtp-from") || null,
+                    smtp_to: getValue("settings-smtp-to") || null,
+                    smtp_use_tls: document.getElementById("settings-smtp-tls").checked
+                },
+                telegram: {
+                    enabled: document.getElementById("settings-telegram-enabled").checked,
+                    chat_id: getValue("settings-telegram-chat") || null
+                },
+                slack: {
+                    enabled: document.getElementById("settings-slack-enabled").checked
+                }
+            };
+
+            const smtpPassword = getValue("settings-smtp-password");
+            const telegramToken = getValue("settings-telegram-token");
+            const slackWebhook = getValue("settings-slack-webhook");
+            if (smtpPassword) payload.email.smtp_password = smtpPassword;
+            if (telegramToken) payload.telegram.bot_token = telegramToken;
+            if (slackWebhook) payload.slack.webhook_url = slackWebhook;
+            return payload;
+        }
+
+        async function saveAlertSettings() {
+            try {
+                const response = await fetch("/api/settings/alerts", {
+                    method: "PUT",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(collectAlertSettingsPayload())
+                });
+                if (!response.ok) throw new Error(await extractAPIError(response));
+                showToast("Settings Saved", "Alert credentials were encrypted and stored.", "encrypted", "success");
+                await loadAlertSettings();
+            } catch (error) {
+                console.error("Failed to save alert settings:", error);
+                showToast("Settings Error", error.message || "Unable to save alert settings.", "error", "error");
+            }
+        }
+
+        async function testAlertSettings() {
+            try {
+                const response = await fetch("/api/settings/alerts/test", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+                if (!response.ok) throw new Error(await extractAPIError(response));
+                const data = await response.json();
+                const results = data.results || [];
+                const failures = results.filter(item => item && item.success === false);
+                if (failures.length) {
+                    const detail = failures.map(item => `${item.channel}: ${item.error || item.message || "failed"}`).join(" | ");
+                    showToast("Test Failed", detail, "error", "error");
+                    return;
+                }
+                showToast("Test Alert", `Alert test completed for ${results.length} channel(s).`, "outgoing_mail", "success");
+            } catch (error) {
+                console.error("Failed to test alert settings:", error);
+                showToast("Test Failed", error.message || "Unable to send test alert.", "error", "error");
+            }
+        }
+
+        async function extractAPIError(response) {
+            try {
+                const payload = await response.json();
+                return payload.detail || `API Error: Status ${response.status}`;
+            } catch (error) {
+                return `API Error: Status ${response.status}`;
             }
         }
 

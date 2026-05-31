@@ -23,3 +23,4 @@ scikit-learn
 sentence-transformers
 fastapi
 uvicorn[standard]
+cryptography

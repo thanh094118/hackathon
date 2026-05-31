@@ -1,6 +1,7 @@
 import os
 import pytest
 from fastapi.testclient import TestClient
+from cryptography.fernet import Fernet
 
 # Set mock mode environment variable for testing
 os.environ["DASHBOARD_USE_MOCK"] = "1"
@@ -104,3 +105,72 @@ def test_api_materialized_campaigns():
     data = response.json()
     assert isinstance(data, list)
 
+def test_api_alert_settings_get_env_fallback():
+    response = client.get("/api/settings/alerts")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["source"] in {"environment", "mongodb"}
+    assert "encryption" in data
+    assert "smtp_password_set" in data["email"]
+    assert "smtp_password_mask" in data["email"]
+    assert "webhook_url" not in data.get("slack", {})
+
+def test_api_alert_settings_save_requires_mongo_when_disconnected():
+    response = client.put("/api/settings/alerts", json={"alerts_enabled": True})
+    assert response.status_code in {200, 503}
+
+def test_api_alert_settings_save_with_patched_store(monkeypatch):
+    from src.dashboard import api
+
+    monkeypatch.setenv("ALERT_SETTINGS_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    db = FakeDb()
+    monkeypatch.setattr(api.query_engine, "db", db)
+
+    response = client.put(
+        "/api/settings/alerts",
+        json={
+            "alerts_enabled": True,
+            "channels": ["slack"],
+            "slack": {"enabled": True, "webhook_url": "https://hooks.slack.test/secret"},
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["slack"]["webhook_url_set"] is True
+    assert "https://hooks.slack.test/secret" not in str(data)
+    assert "https://hooks.slack.test/secret" not in str(db["alert_settings"].document)
+
+def test_api_alert_settings_save_reports_invalid_key(monkeypatch):
+    from src.dashboard import api
+
+    monkeypatch.setenv("ALERT_SETTINGS_ENCRYPTION_KEY", "not-a-fernet-key")
+    monkeypatch.setattr(api.query_engine, "db", FakeDb())
+
+    response = client.put(
+        "/api/settings/alerts",
+        json={"slack": {"enabled": True, "webhook_url": "https://hooks.slack.test/secret"}},
+    )
+
+    assert response.status_code == 503
+    assert "Generate a valid key" in response.json()["detail"]
+
+
+class FakeDb:
+    def __init__(self) -> None:
+        self.collections = {"alert_settings": FakeCollection()}
+
+    def __getitem__(self, name: str) -> "FakeCollection":
+        return self.collections.setdefault(name, FakeCollection())
+
+
+class FakeCollection:
+    def __init__(self) -> None:
+        self.document = None
+
+    def find_one(self, query):
+        return self.document if self.document and self.document.get("_id") == query.get("_id") else None
+
+    def replace_one(self, query, document, upsert=False):
+        self.document = dict(document)
+        return None

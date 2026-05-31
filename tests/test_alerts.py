@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import io
+import urllib.error
+import urllib.request
+
 from src.alerts import (
     AlertConfig,
     AlertDispatcher,
@@ -222,6 +226,32 @@ def test_missing_credentials_do_not_crash():
     assert [result.channel for result in results] == ["email", "telegram", "slack"]
     assert all(result.success is False for result in results)
     assert all(result.error and "missing:" in result.error for result in results)
+
+
+def test_telegram_http_error_includes_status_and_body(monkeypatch):
+    def fail_urlopen(*args, **kwargs):
+        raise urllib.error.HTTPError(
+            url="https://api.telegram.org/botTOKEN/sendMessage",
+            code=400,
+            msg="Bad Request",
+            hdrs={},
+            fp=io.BytesIO(b'{"ok":false,"description":"Bad Request: chat not found"}'),
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", fail_urlopen)
+    config = AlertConfig(
+        alerts_enabled=True,
+        dry_run=False,
+        channels=["telegram"],
+        telegram_enabled=True,
+        telegram_bot_token="TOKEN",
+        telegram_chat_id="123",
+    )
+
+    result = TelegramNotifier(config).send(_alert())
+
+    assert result.success is False
+    assert result.error == "HTTP 400: Bad Request: chat not found"
 
 
 class SuccessNotifier(BaseNotifier):

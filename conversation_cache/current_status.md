@@ -1,5 +1,52 @@
 # Current Status (2026-05-30)
 
+- **Alert Credential Settings Planning (2026-05-31)**:
+  - Inspected `src/dashboard/server.py`, `src/dashboard/api.py`, `src/dashboard/static/index.html`, and `src/alerts/config.py` / `dispatcher.py`.
+  - Confirmed alert credentials are currently environment-backed only, while the dashboard has FastAPI endpoints and static hash-routed views for Overview and Threat Investigator.
+  - Added `conversation_cache/alert_settings_plan.md` with a concrete plan for a Settings section, MongoDB `alert_settings` document, Fernet encryption for secrets, masked browser responses, env fallback, API endpoints, UI changes, and focused tests.
+  - Updated `conversation_cache/todo.md` with the implementation checklist.
+
+- **Alert Credential Settings Implementation (2026-05-31)**:
+  - Added `src/alerts/crypto.py` with Fernet-based secret encryption/decryption using `ALERT_SETTINGS_ENCRYPTION_KEY`.
+  - Added `src/alerts/settings_store.py` for MongoDB-backed `alert_settings` persistence, public masked settings, secret-preserving updates, and conversion into `AlertConfig`.
+  - Added `load_effective_alert_config(...)` in `src/alerts/config.py` and wired `build_default_dispatcher()` to prefer MongoDB settings with env fallback.
+  - Added dashboard API endpoints:
+    - `GET /api/settings/alerts`
+    - `PUT /api/settings/alerts`
+    - `POST /api/settings/alerts/test`
+  - Added a Settings navigation item and Alert Credentials form in `src/dashboard/static/index.html`.
+  - Added placeholder `ALERT_SETTINGS_ENCRYPTION_KEY` to `.env.example` and `cryptography` to `requirements.txt`.
+  - Added tests in `tests/test_alert_settings_store.py` and dashboard API coverage in `tests/test_dashboard_api.py`.
+  - Verification:
+    - `python -m compileall src` passed.
+    - Initial pytest run without `PYTHONPATH=.` failed with `ModuleNotFoundError: No module named 'src'` in this interpreter.
+    - `$env:PYTHONPATH='.'; pytest -q tests/test_alerts.py tests/test_alert_settings_store.py tests/test_dashboard_api.py` passed: 31 tests.
+  - Generated `__pycache__` directories from compile/test were removed.
+
+- **Alert Settings Error Diagnostics Fix (2026-05-31)**:
+  - Investigated browser errors:
+    - `Alert settings have not been saved` occurs because the test endpoint requires a successfully saved MongoDB settings document first.
+    - `ALERT_SETTINGS_ENCRYPTION_KEY is invalid` occurs when the env value is not a valid Fernet key, commonly because the placeholder from `.env.example` was copied literally.
+  - Added encryption key status reporting to public alert settings payloads without exposing the key.
+  - Improved save/test API error details with a valid Fernet key generation command.
+  - Updated the Settings UI to display encryption key status and show backend error details in toast messages.
+  - Added tests for encryption status and invalid-key API errors.
+  - Verification:
+    - `python -m compileall src` passed.
+    - `$env:PYTHONPATH='.'; pytest -q tests/test_alert_settings_store.py tests/test_dashboard_api.py` passed: 22 tests.
+  - Generated `__pycache__` directories from compile/test were removed.
+
+- **Telegram/Slack Alert Failure Diagnostics (2026-05-31)**:
+  - Investigated user-visible test result where Telegram returned only `error: "HTTPError"`.
+  - Updated `src/alerts/telegram_notifier.py` to preserve safe HTTP status and Telegram API response details, e.g. `HTTP 400: Bad Request: chat not found`.
+  - Updated `src/alerts/slack_notifier.py` similarly for HTTP status/body diagnostics.
+  - Updated dashboard Settings test-alert toast so failed channel results show channel-specific error details instead of treating HTTP 200 API responses with failed channel results as success.
+  - Added regression coverage in `tests/test_alerts.py` for Telegram HTTP error detail extraction.
+  - Verification:
+    - `python -m compileall src` passed.
+    - `$env:PYTHONPATH='.'; pytest -q tests/test_alerts.py tests/test_dashboard_api.py` passed: 29 tests.
+  - Generated `__pycache__` directories from compile/test were removed.
+
 - **Loose-Coupled Alert Notifications (2026-05-31)**:
   - Added standalone `src/alerts/` package for reusable Email, Telegram, and Slack alert delivery.
   - Implemented flexible `AlertEvent.from_incident(...)`, structured `AlertSendResult`, environment-backed `AlertConfig`, dry-run support, safe missing-credential handling, and dispatcher-level failure isolation.

@@ -14,6 +14,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from src.dashboard.query_adapter import DashboardQueryAdapter
+from src.alerts.crypto import AlertSettingsCryptoError
+from src.alerts.models import AlertEvent
+from src.alerts.settings_store import AlertSettingsStore, public_settings_from_config
+from src.alerts.config import load_alert_config
+from src.alerts.dispatcher import build_default_dispatcher
 
 app = FastAPI(title="ThreatLens AI API", description="REST API backend for ThreatLens AI SOC Co-Pilot")
 
@@ -30,6 +35,12 @@ app.add_middleware(
 # Using a single query engine instance
 query_engine = DashboardQueryAdapter()
 
+
+def _alert_settings_store() -> AlertSettingsStore:
+    if query_engine.db is None:
+        raise HTTPException(status_code=503, detail="MongoDB is not connected")
+    return AlertSettingsStore(query_engine.db)
+
 # Serve static files path
 STATIC_DIR = Path(__file__).parent / "static"
 STATIC_DIR.mkdir(exist_ok=True)
@@ -37,6 +48,45 @@ STATIC_DIR.mkdir(exist_ok=True)
 @app.get("/api/status")
 def get_status():
     return query_engine.status()
+
+@app.get("/api/settings/alerts")
+def get_alert_settings():
+    try:
+        return _alert_settings_store().get_public_settings()
+    except HTTPException:
+        return public_settings_from_config(load_alert_config(), source="environment")
+
+@app.put("/api/settings/alerts")
+def save_alert_settings(payload: dict):
+    try:
+        return _alert_settings_store().save_settings(payload)
+    except AlertSettingsCryptoError as exc:
+        raise HTTPException(status_code=503, detail=f"{exc}. Generate a valid key with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"") from exc
+
+@app.post("/api/settings/alerts/test")
+def test_alert_settings(payload: dict | None = None):
+    store = _alert_settings_store()
+    config = store.load_config()
+    if config is None:
+        raise HTTPException(status_code=404, detail="Alert settings have not been saved. Save settings successfully before sending a test alert.")
+
+    incident = {
+        "incident_id": "settings-test",
+        "timestamp": "now",
+        "severity": "high",
+        "attack_type": "settings-test",
+        "risk_score": 90,
+        "source_ip": "127.0.0.1",
+        "method": "GET",
+        "uri": "/settings/test",
+        "message": "Dashboard alert settings test",
+        "recommendations": ["Confirm the selected alert channel received this test."],
+    }
+    if payload and isinstance(payload.get("incident"), dict):
+        incident.update(payload["incident"])
+
+    results = build_default_dispatcher(config).send(AlertEvent.from_incident(incident))
+    return {"results": [result.__dict__ for result in results]}
 
 @app.get("/api/summary")
 def get_summary(timeframe: Optional[str] = Query(None)):

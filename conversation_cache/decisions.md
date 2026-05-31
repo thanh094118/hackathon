@@ -6,6 +6,10 @@
 - Real-time alert integration should go through `src/notifications/alerts.py`, which wraps `src.alerts`; raw Email, Telegram, and Slack delivery code must remain only in `src/alerts`.
 - MongoDB exporter alert hooks should run only for the `incidents` collection to avoid duplicate notifications from all-request exports.
 - Attack Simulator target-url mode must only allow localhost and hosts explicitly listed in `SIMULATOR_ALLOWED_HOSTS`.
+- Dashboard-managed alert credentials are stored in MongoDB collection `alert_settings` under `_id: "default"`.
+- Alert credential secrets must be encrypted with Fernet using `ALERT_SETTINGS_ENCRYPTION_KEY`; missing or invalid keys must not result in plaintext secret storage.
+- Browser-facing alert settings responses must return secret status/masks only, never decrypted secret values.
+- Runtime alert config loading should prefer MongoDB alert settings when available and fall back to environment variables for local/manual workflows.
 
 - Centralize dashboard complex MongoDB logic in `src/scoring/mongodb_queries.py` and keep `src/dashboard/query_adapter.py` focused on:
   - env/mode handling

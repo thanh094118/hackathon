@@ -12,6 +12,17 @@
 - [x] Add `scripts/simulate_attacks.py` CLI simulator.
 - [x] Add tests for notifications wrapper and attack simulator.
 - [ ] Future: validate real SMTP/Telegram/Slack and live MongoDB alert delivery in a configured demo environment.
+- [ ] Add dashboard Settings section for MongoDB-backed encrypted alert credentials.
+  - [x] Create implementation plan in `conversation_cache/alert_settings_plan.md`.
+  - [x] Add encryption helper and dependency.
+  - [x] Add MongoDB alert settings store.
+  - [x] Add effective alert config loading from MongoDB with env fallback.
+  - [x] Add dashboard API endpoints for alert settings get/save/test.
+  - [x] Add Settings UI in `src/dashboard/static/index.html`.
+  - [x] Add focused tests and verification.
+  - [x] Improve dashboard/API diagnostics for missing saved settings and invalid encryption key.
+  - [x] Improve Telegram/Slack test-alert failure diagnostics with HTTP status/body and channel-specific UI errors.
+  - [ ] Future: validate visually in a live browser session and test against a configured MongoDB instance with a real `ALERT_SETTINGS_ENCRYPTION_KEY`.
 
 - [x] Add `src/scoring/mongodb_queries.py` centralized query helper module for dashboard complex queries.
 - [x] Refactor `src/dashboard/query_adapter.py` delegation to centralized MongoDB query functions.
