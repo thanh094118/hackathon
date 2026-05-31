@@ -31,3 +31,4 @@ output_test/
 node_modules/
 src/simulator/
 src/notifications/
+package.json
