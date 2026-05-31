@@ -1,15 +1,13 @@
 from .engine import (
     SimulationResult,
-    build_simulated_event,
-    simulate_attack,
-    simulate_direct_mongo,
+    build_attack_request,
+    run_simulation,
     simulate_target_url,
 )
 
 __all__ = [
     "SimulationResult",
-    "build_simulated_event",
-    "simulate_attack",
-    "simulate_direct_mongo",
+    "build_attack_request",
+    "run_simulation",
     "simulate_target_url",
 ]
