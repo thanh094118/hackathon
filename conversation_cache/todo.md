@@ -1,5 +1,15 @@
 # TODO
 
+- [x] Restructure requests and incidents collections to Schema Version 2:
+  - [x] Create schema definition modules [src/schemas/mongodb_schema.py](file:///d:/Code/test/hackathon/src/schemas/mongodb_schema.py) and [src/schemas/field_mapping.py](file:///d:/Code/test/hackathon/src/schemas/field_mapping.py).
+  - [x] Create offline database migration script in [scripts/migrate_collections.py](file:///d:/Code/test/hackathon/scripts/migrate_collections.py).
+  - [x] Modify [src/exporters/mongodb_exporter.py](file:///d:/Code/test/hackathon/src/exporters/mongodb_exporter.py) and [src/main.py](file:///d:/Code/test/hackathon/src/main.py) to export Schema Version 2 nested records.
+  - [x] Update aggregation query library [src/scoring/mongodb_queries.py](file:///d:/Code/test/hackathon/src/scoring/mongodb_queries.py) to query the clean nested schema structure directly.
+  - [x] Update query adapter [src/dashboard/query_adapter.py](file:///d:/Code/test/hackathon/src/dashboard/query_adapter.py) to query the clean nested schema directly.
+  - [x] Run migration script on the live test database, migrating all 28,492 requests and 15,403 incidents.
+  - [x] Clean up temporary dual-write logic to write pure nested documents.
+  - [x] Add integration tests in `tests/test_schema_integration.py` and run full regression test suites.
+
 - [x] Add standalone `src/alerts/` notification package.
 - [x] Add alert event/result models, config loader, formatter, notifier implementations, and dispatcher.
 - [x] Add `tests/test_alerts.py` covering flexible mapping, formatting, dispatcher behavior, dry-runs, and missing credentials.
@@ -12,6 +22,17 @@
 - [x] Add `scripts/simulate_attacks.py` CLI simulator.
 - [x] Add tests for notifications wrapper and attack simulator.
 - [ ] Future: validate real SMTP/Telegram/Slack and live MongoDB alert delivery in a configured demo environment.
+- [ ] Add dashboard Settings section for MongoDB-backed encrypted alert credentials.
+-   - [x] Create implementation plan in `conversation_cache/alert_settings_plan.md`.
+-   - [x] Add encryption helper and dependency.
+-   - [x] Add MongoDB alert settings store.
+-   - [x] Add effective alert config loading from MongoDB with env fallback.
+-   - [x] Add dashboard API endpoints for alert settings get/save/test.
+-   - [x] Add Settings UI in `src/dashboard/static/index.html`.
+-   - [x] Add focused tests and verification.
+-   - [x] Improve dashboard/API diagnostics for missing saved settings and invalid encryption key.
+-   - [x] Improve Telegram/Slack test-alert failure diagnostics with HTTP status/body and channel-specific UI errors.
+-   - [ ] Future: validate visually in a live browser session and test against a configured MongoDB instance with a real `ALERT_SETTINGS_ENCRYPTION_KEY`.
 
 - [x] Add `src/scoring/mongodb_queries.py` centralized query helper module for dashboard complex queries.
 - [x] Refactor `src/dashboard/query_adapter.py` delegation to centralized MongoDB query functions.
@@ -31,3 +52,44 @@
 - [x] Resolve "Unknown" IP display in Top Attacking IPs dashboard table by migrating aggregation pipelines to handle `source_ip` vs `ip` schema mapping.
 - [x] Add dynamic dropdown filter for detection methods (All, Rules Only, ML Only, Hybrid Only) in Threat Investigator sidebar.
 - [x] Map seeded attack pattern fields (category, payload_example, mitigation) to dashboard fields (attack_type, examples, remediation) to ensure Vector Search match cards resolve correctly (Type: scanner, MITRE: T1595 | T1505) instead of displaying "Unknown" or "N/A".
+- [x] Issue 2: Advanced Aggregation Pipelines for SOC Analytics
+  - [x] Implement Coordinated Campaign Detection (APT) query logic with customizable thresholds.
+  - [x] Implement get_ip_blast_radius query logic on MongoDB and adapter/UI.
+  - [x] Update generate_attack_timeline query logic and adapter to support multi-series grouping.
+  - [x] Make Campaign thresholds configurable via Streamlit slider inputs.
+  - [x] Display Blast Radius Plotly donut chart on IP selection.
+  - [x] Render Attack Evolution Timeline as Plotly stacked bar chart.
+  - [x] Write unit tests in test_mongodb_integration.py and test_dashboard_query_adapter.py.
+  - [x] Verify all test suites pass.
+- [x] Implement real-time timestamp simulation in `scripts/simulate_stream.py` to ensure generated logs match current wall-clock time and display correctly in dashboard live panels.
+- [x] Add dynamic Timeframe Select Filter to the ThreatLens AI SOC dashboard:
+  - [x] Support timeframes: Last 15 Minutes (`15m`), Last Hour (`1h`), Last 24 Hours (`24h`), Last 7 Days (`7d`), and All Time (`all`).
+  - [x] Integrate timeframe filtering into MongoDB query functions (`src/scoring/mongodb_queries.py`).
+  - [x] Update the dashboard query adapter (`src/dashboard/query_adapter.py`) to parse timeframes and apply cutoff constraints.
+  - [x] Expose `timeframe` query parameter across FastAPI REST endpoints (`src/dashboard/api.py`).
+  - [x] Update frontend static files (`src/dashboard/static/index.html`) to dynamically refresh all widgets on timeframe dropdown changes.
+  - [x] Write and verify unit tests (`tests/test_dashboard_query_adapter.py` and `tests/test_dashboard_api.py`).
+  - [x] Verify visual rendering and interaction via browser subagent.
+- [x] Implement Hybrid CQRS APT Campaign Detection:
+  - [x] Add get_materialized_campaigns and get_campaigns_metadata helpers to `src/scoring/mongodb_queries.py`.
+  - [x] Integrate dual-path campaigns query (fast path + fallback) in `src/dashboard/query_adapter.py`.
+  - [x] Expose `/api/materialized-campaigns` endpoint in `src/dashboard/api.py`.
+  - [x] Update frontend overview card freshness display and add materialized view badge in `src/dashboard/static/index.html`.
+  - [x] Add unit tests verifying query functions and API routes.
+  - [x] Provide JavaScript Trigger code and manual configuration setup walkthrough.
+
+- [x] Implement Stateful Intelligent Alerting:
+  - [x] Add data models for smart alerting in `src/alerts/models.py`.
+  - [x] Implement CorrelationEngine in `src/alerts/correlation_engine.py`.
+  - [x] Implement IncidentManager in `src/alerts/incident_manager.py`.
+  - [x] Implement DynamicBaseline in `src/alerts/dynamic_baseline.py`.
+  - [x] Implement FPSuppressionEngine in `src/alerts/fp_suppression.py`.
+  - [x] Centralize baseline and FP queries in `src/scoring/mongodb_queries.py`.
+  - [x] Refactor orchestrator `process_batch_alerts` in `src/notifications/alerts.py`.
+  - [x] Integrate smart alerting into `MongoDBExporter` for auto-compatibility with pipeline runs.
+  - [x] Add Fast API endpoints in `src/dashboard/api.py`.
+  - [x] Write and verify unit and integration tests (`tests/test_smart_alerting.py`).
+  - [x] Implement Severity Override (Escalation) during cooldown.
+  - [x] Implement dynamic, endpoint-group specific baselines and min floors.
+  - [x] Implement Smokescreen Protection (Contextual Risk Separation).
+  - [x] Write regression tests and verify all test suites.

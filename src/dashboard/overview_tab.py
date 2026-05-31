@@ -84,7 +84,7 @@ def render_overview_tab(query_engine) -> None:
     top_ip_col, timeline_col = st.columns(2)
 
     with top_ip_col:
-        st.markdown("### Top Attacking IPs")
+        st.markdown("### Top Attacking IPs & Blast Radius")
         top_ips = query_engine.get_top_attacking_ips(limit=10)
         if top_ips:
             rows = []
@@ -100,39 +100,81 @@ def render_overview_tab(query_engine) -> None:
                     }
                 )
             safe_dataframe(rows)
+
+            ip_list = [row.get("ip") for row in top_ips if row.get("ip") and row.get("ip") != "Unknown"]
+            if ip_list:
+                selected_ip = st.selectbox(
+                    "Select IP to visualize Blast Radius endpoints distribution",
+                    options=ip_list,
+                    index=0,
+                    key="blast_radius_ip_selector"
+                )
+                if selected_ip:
+                    blast_radius = query_engine.get_ip_blast_radius(selected_ip)
+                    if blast_radius:
+                        st.markdown(f"**Blast Radius for `{selected_ip}`**")
+                        if px is not None and pd is not None:
+                            frame = pd.DataFrame(blast_radius)
+                            donut = px.pie(
+                                frame,
+                                values="percentage",
+                                names="uri",
+                                hole=0.55,
+                                color_discrete_sequence=["#38BDF8", "#22C55E", "#F59E0B", "#EF4444", "#8B5CF6", "#10B981", "#EC4899"],
+                            )
+                            donut.update_layout(
+                                template="plotly_dark",
+                                paper_bgcolor="rgba(0,0,0,0)",
+                                plot_bgcolor="rgba(0,0,0,0)",
+                                margin=dict(l=10, r=10, t=10, b=10),
+                                showlegend=True,
+                            )
+                            st.plotly_chart(donut, use_container_width=True)
+                        else:
+                            st.write(blast_radius)
+                    else:
+                        st.caption("No endpoint distribution data available for this IP.")
         else:
             render_empty_state("No Attacker IP Data", "No suspicious source IPs have been observed.")
 
     with timeline_col:
-        st.markdown("### Attack Timeline")
-        timeline = query_engine.get_attack_timeline()
+        st.markdown("### Attack Evolution Timeline")
+        timeline = query_engine.get_attack_timeline(bucket_size=5, unit="minute")
         if timeline:
             if px is not None and pd is not None:
                 frame = pd.DataFrame(timeline)
                 frame = frame.sort_values("timestamp")
-                chart = px.line(
+                chart = px.bar(
                     frame,
                     x="timestamp",
                     y="count",
-                    markers=True,
-                    color_discrete_sequence=["#38BDF8"],
+                    color="attack_type",
+                    barmode="stack",
+                    color_discrete_sequence=["#38BDF8", "#F59E0B", "#EF4444", "#8B5CF6", "#10B981", "#EC4899"],
                 )
                 chart.update_layout(
                     template="plotly_dark",
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)",
                     margin=dict(l=10, r=10, t=30, b=10),
-                    xaxis_title="Time",
+                    xaxis_title="Time Bucket",
                     yaxis_title="Malicious Events",
                 )
                 st.plotly_chart(chart, use_container_width=True)
             else:
-                st.line_chart({row["timestamp"]: row["count"] for row in timeline})
+                st.write(timeline)
         else:
             render_empty_state("Timeline Unavailable", "No valid timestamps found for malicious activity timeline.")
 
-    st.markdown("### Active Campaigns")
-    campaigns = query_engine.get_active_campaigns(min_attacks=10)
+    st.markdown("### Coordinated Campaign Detection (APT)")
+    with st.expander("Configure Campaign Detection Thresholds", expanded=False):
+        c1, c2 = st.columns(2)
+        with c1:
+            min_attacks_param = st.slider("Min Frequency (Malicious Requests)", min_value=5, max_value=100, value=50, step=5)
+        with c2:
+            min_types_param = st.slider("Min Attack Types (Multi-tactic)", min_value=1, max_value=5, value=3, step=1)
+
+    campaigns = query_engine.get_active_campaigns(min_attacks=min_attacks_param, min_attack_types=min_types_param)
     if campaigns:
         rows = []
         for row in campaigns:
@@ -149,4 +191,4 @@ def render_overview_tab(query_engine) -> None:
             )
         safe_dataframe(rows)
     else:
-        render_empty_state("No Campaigns", "No active campaign pattern has been identified yet.")
+        render_empty_state("No Campaigns", "No active campaign pattern matching the current thresholds has been identified.")

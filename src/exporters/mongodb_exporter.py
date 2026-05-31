@@ -1,5 +1,6 @@
 import logging
 from typing import Dict, List, Optional
+from datetime import datetime, timezone
 
 try:
     from pymongo import MongoClient, UpdateOne
@@ -14,6 +15,45 @@ except ImportError:
     class UpdateOne: pass
     class BulkWriteError(Exception): pass
     class ConnectionFailure(Exception): pass
+
+
+def _parse_timestamp(value) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(value), tz=timezone.utc)
+        except Exception:
+            return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        pass
+
+    for fmt in (
+        "%Y-%m-%d %H:%M:%S",
+        "%Y/%m/%d %H:%M:%S",
+        "%d/%b/%Y:%H:%M:%S %z",
+        "%Y-%m-%dT%H:%M:%S.%fZ",
+        "%Y-%m-%dT%H:%M:%SZ",
+    ):
+        try:
+            dt = datetime.strptime(text, fmt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except ValueError:
+            continue
+
+    return None
 
 
 class MongoDBExporter:
@@ -70,9 +110,21 @@ class MongoDBExporter:
                 if not event_id:
                     logging.warning("Skipping log record because event_id is missing.")
                     continue
+                
+                doc = dict(record)
+                ts = doc.get("timestamp")
+                if ts:
+                    parsed_ts = _parse_timestamp(ts)
+                    if parsed_ts:
+                        doc["timestamp"] = parsed_ts
+                
+                # Support schema version 2 nesting
+                from src.schemas.mongodb_schema import flat_to_nested
+                doc = flat_to_nested(doc)
+
                 # Update document matched by event_id, insert if it does not exist (upsert=True)
                 operations.append(
-                    UpdateOne({"event_id": event_id}, {"$set": record}, upsert=True)
+                    UpdateOne({"event_id": event_id}, {"$set": doc}, upsert=True)
                 )
                 exported_records.append(record)
 
@@ -115,22 +167,20 @@ class MongoDBExporter:
             return
 
         try:
-            from src.notifications.alerts import send_incident_alert
+            from src.notifications.alerts import process_batch_alerts
         except Exception as exc:
-            logging.warning("Alert notification wrapper is unavailable: %s", exc.__class__.__name__)
+            logging.warning("Alert notification wrapper process_batch_alerts is unavailable: %s", exc.__class__.__name__)
             return
 
-        for record in records:
-            try:
-                results = send_incident_alert(record)
-                if results:
-                    failures = [result for result in results if not getattr(result, "success", False)]
-                    if failures:
-                        logging.warning("Incident alert completed with %d failed channel(s).", len(failures))
-                    else:
-                        logging.info("Incident alert dispatched for event_id=%s.", record.get("event_id"))
-            except Exception as exc:
-                logging.warning("Incident alert failed safely: %s", exc.__class__.__name__)
+        try:
+            result = process_batch_alerts(records, db=self.db)
+            logging.info(
+                f"Batch alert processing complete. "
+                f"Processed: {result.processed_count}, Correlated: {result.correlated_count}, "
+                f"Sent: {result.alert_sent_count}, Merged: {result.merged_count}, Suppressed: {result.suppressed_count}."
+            )
+        except Exception as exc:
+            logging.warning("Batch alert processing failed safely: %s", exc.__class__.__name__)
 
     def close(self):
         if self.client:

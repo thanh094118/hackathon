@@ -2,7 +2,17 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Mapping
+from typing import Any, Mapping
+
+try:
+    from dotenv import load_dotenv
+except Exception:  # pragma: no cover - optional dependency
+    load_dotenv = None
+
+try:
+    from pymongo import MongoClient
+except Exception:  # pragma: no cover - optional dependency
+    MongoClient = None  # type: ignore[assignment]
 
 
 def _get_bool(env: Mapping[str, str], key: str, default: bool = False) -> bool:
@@ -85,3 +95,44 @@ def load_alert_config(env: Mapping[str, str] | None = None) -> AlertConfig:
         slack_enabled=_get_bool(source, "ALERT_SLACK_ENABLED", False),
         slack_webhook_url=source.get("SLACK_WEBHOOK_URL"),
     )
+
+
+def load_effective_alert_config(
+    env: Mapping[str, str] | None = None,
+    *,
+    db: Any | None = None,
+) -> AlertConfig:
+    source = os.environ if env is None else env
+
+    if db is not None:
+        try:
+            from .settings_store import AlertSettingsStore
+
+            stored = AlertSettingsStore(db).load_config()
+            if stored is not None:
+                return stored
+        except Exception:
+            pass
+
+    if env is None and load_dotenv is not None:
+        load_dotenv()
+
+    uri = str(source.get("MONGODB_URI", "")).strip()
+    database_name = (
+        str(source.get("MONGODB_DB_NAME", "")).strip()
+        or str(source.get("MONGODB_DATABASE", "")).strip()
+        or "threatlens"
+    )
+    if uri and MongoClient is not None:
+        try:
+            from .settings_store import AlertSettingsStore
+
+            client = MongoClient(uri, serverSelectionTimeoutMS=3000)
+            stored = AlertSettingsStore(client[database_name]).load_config()
+            client.close()
+            if stored is not None:
+                return stored
+        except Exception:
+            pass
+
+    return load_alert_config(env)

@@ -125,3 +125,56 @@ class AlertSendResult:
     message: str
     dry_run: bool = False
     error: str | None = None
+
+
+@dataclass
+class CorrelatedIncident:
+    correlation_id: str
+    title: str
+    behavior_type: str  # reconnaissance | brute_force | multi_vector | single
+    source_ips: list[str]
+    target_endpoints: list[str]
+    attack_types: list[str]
+    evidence_count: int
+    evidence_ids: list[str]
+    max_risk_score: float
+    severity: str
+    window_start: datetime
+    window_end: datetime
+    events: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class IncidentAction:
+    action: str  # NEW_ALERT | MERGED | SUPPRESSED
+    incident_id: str | None = None
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class TriageResult:
+    is_false_positive: bool
+    similarity_score: float | None = None
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class BaselineResult:
+    should_alert: bool
+    current_count: int
+    baseline_mean: float
+    baseline_std: float
+    threshold: float
+    hour_of_week: int
+    deviation_ratio: float
+
+
+@dataclass(frozen=True)
+class BatchAlertResult:
+    processed_count: int
+    correlated_count: int
+    alert_sent_count: int
+    merged_count: int
+    suppressed_count: int
+    actions: list[IncidentAction]
+

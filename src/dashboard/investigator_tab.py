@@ -105,42 +105,17 @@ def _pick_incident_id(incidents: List[Dict[str, Any]]) -> Optional[str]:
     return selected_id
 
 
-def _matches_filter(row: Dict[str, Any], method_filter: str) -> bool:
-    has_rules = bool(row.get("matched_rule_ids") or row.get("rule_score", 0) > 0)
-    has_ml = bool(row.get("ml_label") == "attack" or row.get("ml_should_alert"))
-    if method_filter == "Rules Only":
-        return has_rules and not has_ml
-    elif method_filter == "ML Only":
-        return has_ml and not has_rules
-    elif method_filter == "Hybrid Only":
-        return has_rules and has_ml
-    return True
-
-
 def render_investigator_tab(query_engine) -> None:
     st.markdown("## Threat Investigator")
-    st.caption("Investigate suspicious requests with MongoDB Vector Search")
-    st.info("MongoDB Vector Search explains suspicious requests by matching them to known attack patterns.")
+    st.caption("Investigate hybrid-scored suspicious requests with MongoDB Vector Search")
+    st.info("MongoDB Vector Search explains suspicious requests by matching hybrid risk evidence to known attack patterns.")
 
-    st.sidebar.markdown("### Detection Filters")
-    detection_method = st.sidebar.selectbox(
-        "Detection Method",
-        ["All", "Rules Only", "ML Only", "Hybrid Only"],
-        help="Filter threats based on the detection engine that triggered them."
-    )
-
-    incidents = query_engine.get_recent_incidents(limit=100, method_filter=detection_method)
+    incidents = query_engine.get_recent_incidents(limit=100)
     if not incidents:
-        if detection_method == "All":
-            render_empty_state(
-                "No Incidents",
-                "No suspicious or malicious incidents are available right now.",
-            )
-        else:
-            render_empty_state(
-                "No Matching Incidents",
-                f"No incidents matched the selected detection filter: '{detection_method}'.",
-            )
+        render_empty_state(
+            "No Incidents",
+            "No suspicious or malicious incidents are available right now.",
+        )
         return
 
     selected_id = _pick_incident_id(incidents)
@@ -219,9 +194,54 @@ def render_investigator_tab(query_engine) -> None:
             "Vector Search is not available yet. Showing rule-based explanation or mock pattern recommendations."
         )
 
-    st.markdown("### Rule-Based Fallback Explanation")
+    # ── Semantic Similar Logs ──────────────────────────────────────────────────
+    with st.expander("🔍 Semantic Similar Logs", expanded=False):
+        st.markdown(
+            "Find historically similar attack payloads using MongoDB Vector Search — "
+            "even when syntax is obfuscated or completely different."
+        )
+
+        has_embedding = isinstance(embedding, list) and len(embedding) > 0
+        if not has_embedding:
+            st.warning(
+                "⚠️ No embedding vector is available for this incident. "
+                "Semantic search requires the request to have been processed by the embedding engine."
+            )
+        else:
+            if st.button("🔍 Find Similar Incidents in History", key="btn_find_similar_incidents"):
+                with st.spinner("Searching for semantically similar incidents…"):
+                    similar_logs: List[Dict[str, Any]] = []
+                    try:
+                        similar_logs = query_engine.find_similar_requests(embedding, limit=5)
+                    except Exception as exc:
+                        st.error(f"Search failed: {exc}")
+
+                if similar_logs:
+                    similar_rows = []
+                    for item in similar_logs:
+                        sim_score = float(item.get("similarity_score", 0.0) or 0.0)
+                        similar_rows.append(
+                            {
+                                "Timestamp": item.get("timestamp", ""),
+                                "Source IP": item.get("ip", "Unknown"),
+                                "URI": str(item.get("uri", "-"))[:80],
+                                "Risk Score": item.get("risk_score", 0),
+                                "Semantic Match": f"{round(sim_score * 100, 1)}%",
+                            }
+                        )
+                    st.success(f"Found **{len(similar_rows)}** semantically similar incident(s).")
+                    safe_dataframe(similar_rows)
+                else:
+                    st.info(
+                        "No semantically similar incidents found in the database. "
+                        "This may be the first time this payload pattern has been observed."
+                    )
+    # ── End Semantic Similar Logs ──────────────────────────────────────────────
+
+    st.markdown("### Hybrid Risk Explanation")
     st.write(query_engine.build_rule_based_explanation(detail))
 
     st.markdown("### Recommended Response")
     recommendations = query_engine.get_response_recommendations(detail, patterns=patterns)
     render_recommendation_list(recommendations)
+

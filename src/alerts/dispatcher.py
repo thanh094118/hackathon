@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from dataclasses import replace
 
 from .base import BaseNotifier
-from .config import AlertConfig, load_alert_config
+from .config import AlertConfig, load_effective_alert_config
 from .email_notifier import EmailNotifier
 from .models import AlertEvent, AlertSendResult
 from .slack_notifier import SlackNotifier
@@ -43,7 +43,7 @@ class AlertDispatcher:
 
 
 def build_default_dispatcher(config: AlertConfig | None = None) -> AlertDispatcher:
-    resolved = config or load_alert_config()
+    resolved = config or load_effective_alert_config()
     return AlertDispatcher(
         resolved,
         notifiers=[

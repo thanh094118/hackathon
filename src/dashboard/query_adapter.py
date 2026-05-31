@@ -132,7 +132,10 @@ def _normalize_attack_type(value: Any) -> str:
 
 
 def _normalize_label(record: Mapping[str, Any]) -> str:
-    raw = _first_non_empty(record, "prediction.label", "final_label", "ml_label", "label")
+    scoring = record.get("scoring") or {}
+    detection = record.get("detection") or {}
+    ml = detection.get("ml") or {}
+    raw = scoring.get("final_label") or ml.get("label") or record.get("label")
     if raw is None:
         return "unknown"
     text = str(raw).strip().lower()
@@ -142,17 +145,12 @@ def _normalize_label(record: Mapping[str, Any]) -> str:
 
 
 def _extract_prediction_score(record: Mapping[str, Any]) -> float:
-    value = _first_non_empty(
-        record,
-        "prediction.score",
-        "prediction.confidence",
-        "ml_attack_probability",
-        "ml_confidence",
-        "score",
-    )
+    detection = record.get("detection") or {}
+    ml = detection.get("ml") or {}
+    value = ml.get("probability") or ml.get("confidence") or ml.get("score")
     if value is None:
-        # Fallback: derive from risk_score (0-100) when ML fields are absent
-        risk = _first_non_empty(record, "risk_score", "rule_score")
+        scoring = record.get("scoring") or {}
+        risk = scoring.get("risk_score")
         if risk is not None:
             return max(0.0, min(_safe_number(risk) / 100.0, 1.0))
         return 0.0
@@ -163,7 +161,8 @@ def _extract_prediction_score(record: Mapping[str, Any]) -> float:
 
 
 def _extract_risk_score(record: Mapping[str, Any]) -> int:
-    value = _first_non_empty(record, "risk_score", "rule_score", "prediction.risk_score")
+    scoring = record.get("scoring") or {}
+    value = scoring.get("risk_score")
     if value is None:
         score = _extract_prediction_score(record)
         return _safe_int(score * 100)
@@ -171,7 +170,10 @@ def _extract_risk_score(record: Mapping[str, Any]) -> int:
 
 
 def _extract_severity(record: Mapping[str, Any], risk_score: int) -> str:
-    raw = _first_non_empty(record, "severity", "rule_severity", "risk_level")
+    scoring = record.get("scoring") or {}
+    detection = record.get("detection") or {}
+    rules = detection.get("rules") or {}
+    raw = scoring.get("risk_level") or rules.get("severity") or record.get("severity")
     if raw is not None:
         text = str(raw).strip().lower()
         if text:
@@ -193,43 +195,87 @@ def _is_malicious_record(record: Mapping[str, Any]) -> bool:
     if label in {"malicious", "suspicious", "attack", "attacker", "anomaly", "anomalous"}:
         return True
 
-    attack_type = _normalize_attack_type(_first_non_empty(record, "attack_type", "prediction.attack_type"))
+    detection = record.get("detection") or {}
+    rules = detection.get("rules") or {}
+    ml = detection.get("ml") or {}
+    attack_type = _normalize_attack_type(rules.get("attack_type") or ml.get("attack_type"))
     if attack_type.lower() not in {"unknown", "", "none", "normal", "benign"}:
         return True
 
     return _extract_risk_score(record) >= 70
 
 
+def _extract_detection_sources(record: Mapping[str, Any]) -> List[str]:
+    scoring = record.get("scoring") or {}
+    raw_sources = scoring.get("detection_sources")
+    sources: List[str] = []
+
+    if isinstance(raw_sources, str):
+        raw_sources = [raw_sources]
+    if isinstance(raw_sources, (list, tuple, set)):
+        for value in raw_sources:
+            text = str(value or "").strip().lower()
+            if text and text not in sources:
+                sources.append(text)
+
+    if sources:
+        return sources
+
+    detection = record.get("detection") or {}
+    rules = detection.get("rules") or {}
+    ml = detection.get("ml") or {}
+    if rules.get("matched_ids") or _safe_int(rules.get("score"), 0) > 0:
+        sources.append("rules")
+    ml_label = str(ml.get("label") or "").strip().lower()
+    if ml_label in {"attack", "malicious", "suspicious"} or ml.get("should_alert"):
+        sources.append("ml")
+    if _safe_int(scoring.get("risk_bonus"), 0) > 0:
+        sources.append("features")
+
+    return sources
+
+
 def _normalize_request_record(record: Mapping[str, Any]) -> Dict[str, Any]:
-    incident_id = _first_non_empty(record, "incident_id", "event_id", "_id")
-    event_id = _first_non_empty(record, "event_id", "_id")
+    incident_id = record.get("incident_id") or record.get("event_id") or record.get("_id")
+    event_id = record.get("event_id") or record.get("_id")
 
     risk_score = _extract_risk_score(record)
     prediction_score = _extract_prediction_score(record)
 
+    request = record.get("request") or {}
+    preprocessed = record.get("preprocessed") or {}
+    detection = record.get("detection") or {}
+    rules = detection.get("rules") or {}
+    ml = detection.get("ml") or {}
+    scoring = record.get("scoring") or {}
+
     normalized = {
         "incident_id": str(incident_id) if incident_id is not None else str(event_id) if event_id is not None else "",
         "event_id": str(event_id) if event_id is not None else "",
-        "timestamp": _timestamp_to_text(_first_non_empty(record, "timestamp", "time", "@timestamp", "created_at")),
-        "ip": str(_first_non_empty(record, "ip", "source_ip", "client_ip", "c_ip") or "Unknown"),
-        "method": str(_first_non_empty(record, "method", "http_method", "verb", "cs_method") or "-"),
-        "uri": str(_first_non_empty(record, "uri", "original_url", "raw_uri", "url", "request_uri") or "-"),
-        "attack_type": _normalize_attack_type(_first_non_empty(record, "attack_type", "prediction.attack_type", "ml_attack_type")),
+        "timestamp": _timestamp_to_text(record.get("timestamp")),
+        "ip": str(request.get("source_ip") or "Unknown"),
+        "method": str(request.get("method") or "-"),
+        "uri": str(request.get("uri") or "-"),
+        "attack_type": _normalize_attack_type(rules.get("attack_type") or ml.get("attack_type")),
         "risk_score": risk_score,
         "prediction_score": round(prediction_score, 4),
         "severity": _extract_severity(record, risk_score),
         "verdict": _normalize_label(record),
-        "user_agent": str(_first_non_empty(record, "user_agent", "ua", "request_user_agent", "cs_user_agent") or ""),
-        "raw": str(_first_non_empty(record, "raw", "raw_log", "raw_line", "raw_request") or ""),
-        "normalized_request": str(_first_non_empty(record, "normalized_request", "request", "normalized_uri") or ""),
-        "matched_rule_ids": _first_non_empty(record, "matched_rule_ids") or [],
-        "matched_rules": _first_non_empty(record, "matched_rules") or [],
-        "embedding": _first_non_empty(record, "embedding", "features.embedding") or [],
-        "ml_label": record.get("ml_label"),
-        "ml_should_alert": record.get("ml_should_alert"),
-        "should_alert": record.get("should_alert"),
-        "ml_attack_type": record.get("ml_attack_type"),
-        "rule_score": record.get("rule_score"),
+        "user_agent": str(request.get("user_agent") or ""),
+        "raw": str(request.get("raw_log") or ""),
+        "normalized_request": str(preprocessed.get("normalized_uri") or ""),
+        "matched_rule_ids": rules.get("matched_ids") or [],
+        "matched_rules": rules.get("matched_rules") or [],
+        "embedding": record.get("embedding") or [],
+        "ml_label": ml.get("label"),
+        "ml_should_alert": ml.get("should_alert"),
+        "should_alert": scoring.get("should_alert"),
+        "ml_attack_type": ml.get("attack_type"),
+        "rule_score": rules.get("score"),
+        "detection_method": scoring.get("detection_method") or "hybrid",
+        "detection_sources": _extract_detection_sources(record),
+        "primary_signal": str(scoring.get("primary_signal") or "unknown"),
+        "risk_input_scores": scoring.get("risk_input_scores") or {},
     }
 
     if not isinstance(normalized["matched_rule_ids"], list):
@@ -279,6 +325,7 @@ class DashboardQueryAdapter:
         if load_dotenv is not None:
             load_dotenv()
 
+        self._explicit_now = now is not None
         self._now = _ensure_aware_utc(now or datetime.now(timezone.utc))
         self.uri = str(os.getenv("MONGODB_URI", "")).strip()
         self.database_name = (
@@ -296,6 +343,7 @@ class DashboardQueryAdapter:
         self.requests_collection_name: Optional[str] = None
         self.incidents_collection_name: Optional[str] = None
         self.patterns_collection_name: Optional[str] = None
+        self.campaigns_collection_name: Optional[str] = None
 
         self._mock = self._build_mock_dataset()
         self._status = {
@@ -308,6 +356,229 @@ class DashboardQueryAdapter:
         }
 
         self._connect()
+
+    def _parse_timeframe(self, timeframe: Optional[str]) -> Optional[datetime]:
+        if not timeframe or timeframe.lower() in ("all", "all_time", ""):
+            return None
+        
+        base_time = self._now if self._explicit_now else datetime.now(timezone.utc)
+        
+        tf = timeframe.lower().strip()
+        try:
+            if tf.endswith("m"):
+                minutes = int(tf[:-1])
+                return base_time - timedelta(minutes=minutes)
+            elif tf.endswith("h"):
+                hours = int(tf[:-1])
+                return base_time - timedelta(hours=hours)
+            elif tf.endswith("d"):
+                days = int(tf[:-1])
+                return base_time - timedelta(days=days)
+        except Exception:
+            pass
+        return None
+
+    def _build_timeframe_match(self, timeframe: Optional[str]) -> Dict[str, Any]:
+        cutoff = self._parse_timeframe(timeframe)
+        if not cutoff:
+            return {}
+        return {
+            "$or": [
+                {
+                    "$and": [
+                        {"timestamp": {"$type": "date"}},
+                        {"timestamp": {"$gte": cutoff}}
+                    ]
+                },
+                {
+                    "$and": [
+                        {"timestamp": {"$type": "string"}},
+                        {
+                            "$expr": {
+                                "$gte": [
+                                    {
+                                        "$dateFromString": {
+                                            "dateString": "$timestamp",
+                                            "onError": None,
+                                            "onNull": None
+                                        }
+                                    },
+                                    cutoff
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+
+    def _filter_mock_by_timeframe(self, items: List[Dict[str, Any]], timeframe: Optional[str]) -> List[Dict[str, Any]]:
+        cutoff = self._parse_timeframe(timeframe)
+        if not cutoff:
+            return items
+        
+        filtered = []
+        for item in items:
+            ts_str = item.get("timestamp")
+            if not ts_str:
+                continue
+            try:
+                ts_dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                if ts_dt >= cutoff:
+                    filtered.append(item)
+            except Exception:
+                filtered.append(item)
+        return filtered
+
+    def _timeframe_to_delta(self, timeframe: Optional[str]) -> Optional[timedelta]:
+        if not timeframe or timeframe.lower() in ("all", "all_time", ""):
+            return None
+
+        tf = timeframe.lower().strip()
+        try:
+            if tf.endswith("m"):
+                minutes = int(tf[:-1])
+                return timedelta(minutes=minutes)
+            if tf.endswith("h"):
+                hours = int(tf[:-1])
+                return timedelta(hours=hours)
+            if tf.endswith("d"):
+                days = int(tf[:-1])
+                return timedelta(days=days)
+        except Exception:
+            return None
+        return None
+
+    def _format_timeframe_label(self, timeframe: Optional[str]) -> str:
+        if not timeframe:
+            return "last period"
+
+        tf = timeframe.lower().strip()
+        if tf.endswith("m"):
+            value = _safe_int(tf[:-1], 0)
+            return f"last {value} minutes" if value != 1 else "last minute"
+        if tf.endswith("h"):
+            value = _safe_int(tf[:-1], 0)
+            return f"last {value} hours" if value != 1 else "last hour"
+        if tf.endswith("d"):
+            value = _safe_int(tf[:-1], 0)
+            return f"last {value} days" if value != 1 else "last day"
+        return "last period"
+
+    def _get_timeframe_window(self, timeframe: Optional[str]) -> Optional[Dict[str, Any]]:
+        delta = self._timeframe_to_delta(timeframe)
+        if not delta:
+            return None
+
+        base_time = self._now if self._explicit_now else datetime.now(timezone.utc)
+        end = base_time
+        start = base_time - delta
+        prev_end = start
+        prev_start = start - delta
+        return {
+            "start": start,
+            "end": end,
+            "prev_start": prev_start,
+            "prev_end": prev_end,
+            "label": self._format_timeframe_label(timeframe),
+        }
+
+    def _build_range_match(self, start: Optional[datetime], end: Optional[datetime]) -> Dict[str, Any]:
+        if not start or not end:
+            return {}
+        return {
+            "$or": [
+                {
+                    "$and": [
+                        {"timestamp": {"$type": "date"}},
+                        {"timestamp": {"$gte": start, "$lt": end}},
+                    ]
+                },
+                {
+                    "$and": [
+                        {"timestamp": {"$type": "string"}},
+                        {
+                            "$expr": {
+                                "$and": [
+                                    {
+                                        "$gte": [
+                                            {
+                                                "$dateFromString": {
+                                                    "dateString": "$timestamp",
+                                                    "onError": None,
+                                                    "onNull": None,
+                                                }
+                                            },
+                                            start,
+                                        ]
+                                    },
+                                    {
+                                        "$lt": [
+                                            {
+                                                "$dateFromString": {
+                                                    "dateString": "$timestamp",
+                                                    "onError": None,
+                                                    "onNull": None,
+                                                }
+                                            },
+                                            end,
+                                        ]
+                                    },
+                                ]
+                            }
+                        },
+                    ]
+                },
+            ]
+        }
+
+    def _filter_mock_by_range(
+        self,
+        items: List[Dict[str, Any]],
+        start: Optional[datetime],
+        end: Optional[datetime],
+    ) -> List[Dict[str, Any]]:
+        if not start or not end:
+            return items
+
+        filtered: List[Dict[str, Any]] = []
+        for item in items:
+            ts_dt = _parse_timestamp(item.get("timestamp"))
+            if ts_dt is None:
+                continue
+            if start <= ts_dt < end:
+                filtered.append(item)
+        return filtered
+
+    def _compute_trend(self, current: int, previous: int, label: str) -> Dict[str, Any]:
+        delta = current - previous
+        if delta > 0:
+            direction = "up"
+        elif delta < 0:
+            direction = "down"
+        else:
+            direction = "flat"
+
+        percent: Optional[float] = None
+        if previous > 0:
+            percent = (delta / previous) * 100.0
+
+        if percent is not None:
+            percent = round(percent, 1)
+
+        return {
+            "direction": direction,
+            "percent": percent,
+            "delta": delta,
+            "comparison_label": f"vs {label}" if label else None,
+        }
+
+    def _combine_queries(self, q1: Dict[str, Any], q2: Dict[str, Any]) -> Dict[str, Any]:
+        if not q1:
+            return q2
+        if not q2:
+            return q1
+        return {"$and": [q1, q2]}
 
     def status(self) -> Dict[str, Any]:
         payload = dict(self._status)
@@ -323,67 +594,107 @@ class DashboardQueryAdapter:
     # Overview tab query methods
     # -------------------------
 
-    def get_soc_summary(self) -> Dict[str, int]:
+    def get_soc_summary(self, timeframe: Optional[str] = None) -> Dict[str, Any]:
+        window = self._get_timeframe_window(timeframe)
         if self.is_mock_mode():
-            requests = self._mock["requests"]
-            incidents = self._mock["incidents"]
+            if window:
+                requests = self._filter_mock_by_range(self._mock["requests"], window["start"], window["end"])
+                incidents = self._filter_mock_by_range(self._mock["incidents"], window["start"], window["end"])
+                prev_requests = self._filter_mock_by_range(self._mock["requests"], window["prev_start"], window["prev_end"])
+            else:
+                requests = self._filter_mock_by_timeframe(self._mock["requests"], timeframe)
+                incidents = self._filter_mock_by_timeframe(self._mock["incidents"], timeframe)
+                prev_requests = []
             malicious = [row for row in requests if _is_malicious_record(row)]
-            campaigns = self.get_active_campaigns(min_attacks=10)
+            prev_malicious = [row for row in prev_requests if _is_malicious_record(row)]
+            campaigns = self.get_active_campaigns(min_attacks=10, timeframe=timeframe)
             high_incidents = [
                 row
                 for row in incidents
                 if str(row.get("severity", "")).lower() in {"high", "critical"}
                 or _safe_int(row.get("risk_score"), 0) >= 80
             ]
+            total_trend = self._compute_trend(len(requests), len(prev_requests), window["label"]) if window else None
+            malicious_trend = self._compute_trend(len(malicious), len(prev_malicious), window["label"]) if window else None
             return {
                 "total_requests": len(requests),
                 "malicious_requests": len(malicious),
                 "total_incidents": len(incidents),
                 "active_campaigns": len(campaigns),
+                "campaigns_last_updated": None,
                 "high_severity_incidents": len(high_incidents),
+                "total_requests_trend": total_trend,
+                "malicious_requests_trend": malicious_trend,
             }
 
-        requests_count = self._count_documents(self.requests_collection_name, {})
-        malicious_count = self._count_documents(self.requests_collection_name, self._malicious_match_query())
+        if window:
+            tf_match = self._build_range_match(window["start"], window["end"])
+        else:
+            tf_match = self._build_timeframe_match(timeframe)
 
-        incident_count = self._count_documents(self.incidents_collection_name, {})
+        requests_count = self._count_documents(self.requests_collection_name, tf_match)
+        malicious_count = self._count_documents(
+            self.requests_collection_name,
+            self._combine_queries(tf_match, self._malicious_match_query())
+        )
+
+        incident_count = self._count_documents(self.incidents_collection_name, tf_match)
         if incident_count == 0:
             incident_count = malicious_count
 
         high_severity = self._count_documents(
             self.incidents_collection_name,
-            {"severity": {"$in": ["high", "critical", "HIGH", "CRITICAL"]}},
+            self._combine_queries(tf_match, {"severity": {"$in": ["high", "critical", "HIGH", "CRITICAL"]}}),
         )
         if high_severity == 0:
             high_severity = self._count_documents(
                 self.requests_collection_name,
-                {
-                    "$and": [
-                        self._malicious_match_query(),
-                        {
-                            "$or": [
-                                {"severity": {"$in": ["high", "critical", "HIGH", "CRITICAL"]}},
-                                {"risk_score": {"$gte": 80}},
-                            ]
-                        },
-                    ]
-                },
+                self._combine_queries(
+                    tf_match,
+                    {
+                        "$and": [
+                            self._malicious_match_query(),
+                            {
+                                "$or": [
+                                    {"severity": {"$in": ["high", "critical", "HIGH", "CRITICAL"]}},
+                                    {"risk_score": {"$gte": 80}},
+                                ]
+                            },
+                        ]
+                    }
+                ),
             )
 
-        campaigns = self.get_active_campaigns(min_attacks=10)
+        materialized = self._get_materialized_campaigns_count()
+
+        total_trend = None
+        malicious_trend = None
+        if window:
+            prev_match = self._build_range_match(window["prev_start"], window["prev_end"])
+            prev_requests = self._count_documents(self.requests_collection_name, prev_match)
+            prev_malicious = self._count_documents(
+                self.requests_collection_name,
+                self._combine_queries(prev_match, self._malicious_match_query()),
+            )
+            total_trend = self._compute_trend(requests_count, prev_requests, window["label"])
+            malicious_trend = self._compute_trend(malicious_count, prev_malicious, window["label"])
 
         return {
             "total_requests": requests_count,
             "malicious_requests": malicious_count,
             "total_incidents": incident_count,
-            "active_campaigns": len(campaigns),
+            "active_campaigns": materialized.get("count", 0),
+            "campaigns_last_updated": materialized.get("last_updated"),
             "high_severity_incidents": high_severity,
+            "total_requests_trend": total_trend,
+            "malicious_requests_trend": malicious_trend,
         }
 
-    def get_attack_type_distribution(self) -> List[Dict[str, Any]]:
+    def get_attack_type_distribution(self, timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.is_mock_mode():
+            requests = self._filter_mock_by_timeframe(self._mock["requests"], timeframe)
             counts: Dict[str, int] = {}
-            for record in self._mock["requests"]:
+            for record in requests:
                 if not _is_malicious_record(record):
                     continue
                 attack_type = _normalize_attack_type(record.get("attack_type"))
@@ -393,12 +704,13 @@ class DashboardQueryAdapter:
                 for attack_type, count in sorted(counts.items(), key=lambda item: item[1], reverse=True)
             ]
 
-        rows = self._query_attack_type_distribution()
+        rows = self._query_attack_type_distribution(timeframe=timeframe)
         if not rows and self.requests_collection_name:
             # Keep a read-only local fallback when centralized query helpers are unavailable.
+            tf_match = self._build_timeframe_match(timeframe)
             records = self._find_many(
                 self.requests_collection_name,
-                self._malicious_match_query(),
+                self._combine_queries(tf_match, self._malicious_match_query()),
                 projection={"attack_type": 1, "ml_attack_type": 1, "prediction.attack_type": 1, "risk_score": 1, "prediction.label": 1, "ml_label": 1, "ml_should_alert": 1, "should_alert": 1},
                 limit=20000,
                 sort=None,
@@ -423,12 +735,13 @@ class DashboardQueryAdapter:
         output.sort(key=lambda item: int(item.get("count", 0)), reverse=True)
         return output
 
-    def get_top_attacking_ips(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_top_attacking_ips(self, limit: int = 10, timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         limit = max(1, int(limit))
 
         if self.is_mock_mode():
+            requests = self._filter_mock_by_timeframe(self._mock["requests"], timeframe)
             grouped: Dict[str, Dict[str, Any]] = {}
-            for row in self._mock["requests"]:
+            for row in requests:
                 if not _is_malicious_record(row):
                     continue
                 normalized = _normalize_request_record(row)
@@ -456,12 +769,13 @@ class DashboardQueryAdapter:
 
             return self._finalize_top_ips(list(grouped.values()), limit)
 
-        rows = self._query_top_attacking_ips(limit=limit)
+        rows = self._query_top_attacking_ips(limit=limit, timeframe=timeframe)
         if not rows and self.requests_collection_name:
             # Keep a read-only fallback to avoid dashboard failures when centralized helper is unavailable.
+            tf_match = self._build_timeframe_match(timeframe)
             records = self._find_many(
                 self.requests_collection_name,
-                self._malicious_match_query(),
+                self._combine_queries(tf_match, self._malicious_match_query()),
                 projection={"ip": 1, "source_ip": 1, "client_ip": 1, "attack_type": 1, "ml_attack_type": 1, "uri": 1, "timestamp": 1, "risk_score": 1, "prediction": 1, "ml_label": 1, "ml_should_alert": 1, "should_alert": 1},
                 limit=20000,
                 sort=[("timestamp", -1)],
@@ -513,41 +827,91 @@ class DashboardQueryAdapter:
 
         return self._finalize_top_ips(mapped, limit)
 
-    def get_attack_timeline(self) -> List[Dict[str, Any]]:
+    def get_attack_timeline(self, bucket_size: int = 5, unit: str = "minute", timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.is_mock_mode():
-            return self._build_timeline_from_records(self._mock["requests"])
+            requests = self._filter_mock_by_timeframe(self._mock["requests"], timeframe)
+            return self._build_timeline_from_records(requests)
 
         if not self.requests_collection_name:
             return []
 
-        rows = self._query_attack_timeline()
+        rows = self._query_attack_timeline(bucket_size=bucket_size, unit=unit, timeframe=timeframe)
         if rows:
             timeline: List[Dict[str, Any]] = []
             for row in rows:
                 timestamp_value = _first_non_empty(row, "timestamp", "_id")
                 timestamp_text = _timestamp_to_text(timestamp_value)
+                attack_type = str(row.get("attack_type") or "Unknown")
                 count = _safe_int(row.get("count"), 0)
                 if not timestamp_text or count <= 0:
                     continue
-                timeline.append({"timestamp": timestamp_text, "count": count})
+                timeline.append({
+                    "timestamp": timestamp_text,
+                    "attack_type": attack_type,
+                    "count": count
+                })
             if timeline:
-                timeline.sort(key=lambda item: item.get("timestamp", ""))
+                timeline.sort(key=lambda item: (item.get("timestamp", ""), item.get("attack_type", "")))
                 return timeline
 
+        tf_match = self._build_timeframe_match(timeframe)
         recent_records = self._find_many(
             self.requests_collection_name,
-            self._malicious_match_query(),
-            projection={"timestamp": 1, "attack_type": 1, "prediction": 1, "risk_score": 1},
+            self._combine_queries(tf_match, self._malicious_match_query()),
+            projection={"timestamp": 1, "attack_type": 1, "prediction": 1, "risk_score": 1, "ml_attack_type": 1},
             limit=10000,
             sort=[("timestamp", 1)],
         )
         return self._build_timeline_from_records(recent_records)
 
-    def get_active_campaigns(self, min_attacks: int = 10) -> List[Dict[str, Any]]:
+    def get_ip_blast_radius(self, ip: str) -> List[Dict[str, Any]]:
+        ip = str(ip or "").strip()
+        if not ip:
+            return []
+
+        if self.is_mock_mode():
+            matched = [
+                row for row in self._mock["requests"]
+                if str(row.get("ip")) == ip or str(row.get("source_ip")) == ip
+            ]
+            if matched:
+                counts: Dict[str, int] = {}
+                for row in matched:
+                    uri = str(row.get("uri") or "Unknown")
+                    counts[uri] = counts.get(uri, 0) + 1
+                total = sum(counts.values())
+                return [
+                    {
+                        "uri": uri,
+                        "count": count,
+                        "percentage": round((count / total) * 100.0, 1)
+                    }
+                    for uri, count in sorted(counts.items(), key=lambda x: x[1], reverse=True)
+                ]
+            return [
+                {"uri": "/login", "count": 8, "percentage": 80.0},
+                {"uri": "/api/users", "count": 2, "percentage": 20.0}
+            ]
+
+        rows = self._query_ip_blast_radius(ip)
+        if not rows:
+            return []
+
+        return [
+            {
+                "uri": str(row.get("uri") or "Unknown"),
+                "count": _safe_int(row.get("count"), 0),
+                "percentage": round(_safe_number(row.get("percentage"), 0.0), 2)
+            }
+            for row in rows
+        ]
+
+    def get_active_campaigns(self, min_attacks: int = 50, min_attack_types: int = 3, timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         threshold = max(1, int(min_attacks))
+        min_types = max(1, int(min_attack_types))
 
         if not self.is_mock_mode():
-            rows = self._query_attack_campaigns(min_attacks=threshold, limit=200)
+            rows = self._query_attack_campaigns(min_attacks=threshold, min_attack_types=min_types, limit=200, timeframe=timeframe)
             if rows:
                 campaigns: List[Dict[str, Any]] = []
                 for row in rows:
@@ -590,7 +954,7 @@ class DashboardQueryAdapter:
                 campaigns.sort(key=lambda item: int(item.get("total_attacks", 0)), reverse=True)
                 return campaigns
 
-        top_ips = self.get_top_attacking_ips(limit=200)
+        top_ips = self.get_top_attacking_ips(limit=200, timeframe=timeframe)
 
         campaigns: List[Dict[str, Any]] = []
         for row in top_ips:
@@ -600,7 +964,7 @@ class DashboardQueryAdapter:
 
             if (
                 total_attacks >= threshold
-                or len(attack_types) > 1
+                or len(attack_types) >= min_types
                 or len(target_uris) > 1
             ):
                 campaigns.append(
@@ -618,53 +982,75 @@ class DashboardQueryAdapter:
         campaigns.sort(key=lambda item: int(item.get("total_attacks", 0)), reverse=True)
         return campaigns
 
+    def get_materialized_campaigns(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Read pre-computed campaigns from Atlas Materialized View."""
+        if self.is_mock_mode():
+            return self.get_active_campaigns(min_attacks=10)
+        
+        if self.db is None or mongodb_queries is None or not hasattr(mongodb_queries, "get_materialized_campaigns"):
+            return self.get_active_campaigns(min_attacks=10)
+        
+        try:
+            coll_name = self.campaigns_collection_name or "active_campaigns"
+            rows = mongodb_queries.get_materialized_campaigns(self.db, campaigns_collection=coll_name, limit=limit)
+            if rows:
+                # Format dates and ensure proper shapes
+                formatted = []
+                for row in rows:
+                    formatted.append({
+                        "ip": row.get("ip", "Unknown"),
+                        "total_attacks": row.get("total_attacks", 0),
+                        "attack_types": row.get("attack_types") or [],
+                        "target_uris": row.get("target_uris") or [],
+                        "first_seen": _timestamp_to_text(row.get("first_seen")),
+                        "last_seen": _timestamp_to_text(row.get("last_seen")),
+                        "risk_level": row.get("risk_level", "low"),
+                    })
+                return formatted
+        except Exception:
+            pass
+        
+        # Fallback to dynamic aggregation if materialized view is empty or errors
+        return self.get_active_campaigns(min_attacks=10)
+
+    def _get_materialized_campaigns_count(self) -> Dict[str, Any]:
+        """Read campaign count from materialized view (fast path)."""
+        if self.is_mock_mode():
+            campaigns = self.get_active_campaigns(min_attacks=10)
+            return {"count": len(campaigns), "last_updated": None}
+
+        if self.db is None or mongodb_queries is None or not hasattr(mongodb_queries, "get_campaigns_metadata"):
+            campaigns = self.get_active_campaigns(min_attacks=10)
+            return {"count": len(campaigns), "last_updated": None}
+            
+        try:
+            coll_name = self.campaigns_collection_name or "active_campaigns"
+            return mongodb_queries.get_campaigns_metadata(self.db, campaigns_collection=coll_name)
+        except Exception:
+            try:
+                campaigns = self.get_active_campaigns(min_attacks=10)
+                return {"count": len(campaigns), "last_updated": None}
+            except Exception:
+                return {"count": 0, "last_updated": None}
+
     # -----------------------------
     # Investigation tab query methods
     # -----------------------------
 
-    def get_recent_incidents(self, limit: int = 100, method_filter: str = "All") -> List[Dict[str, Any]]:
+    def get_recent_incidents(self, limit: int = 100, method_filter: str = "All", timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         limit = max(1, int(limit))
 
         if self.is_mock_mode():
+            incidents = self._filter_mock_by_timeframe(self._mock["incidents"], timeframe)
             rows = [
                 _normalize_request_record(record)
-                for record in self._mock["incidents"]
+                for record in incidents
             ]
-            if method_filter != "All":
-                filtered = []
-                for row in rows:
-                    has_rules = bool(row.get("matched_rule_ids") or row.get("rule_score", 0) > 0)
-                    has_ml = bool(row.get("ml_label") == "attack" or row.get("ml_should_alert"))
-                    if method_filter == "Rules Only" and has_rules and not has_ml:
-                        filtered.append(row)
-                    elif method_filter == "ML Only" and has_ml and not has_rules:
-                        filtered.append(row)
-                    elif method_filter == "Hybrid Only" and has_rules and has_ml:
-                        filtered.append(row)
-                rows = filtered
             rows.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
             return rows[:limit]
 
-        query: Dict[str, Any] = {}
-        if method_filter != "All":
-            has_rules_cond = {
-                "$or": [
-                    {"matched_rule_ids.0": {"$exists": True}},
-                    {"rule_score": {"$gt": 0}}
-                ]
-            }
-            has_ml_cond = {
-                "$or": [
-                    {"ml_label": "attack"},
-                    {"ml_should_alert": True}
-                ]
-            }
-            if method_filter == "Rules Only":
-                query = {"$and": [has_rules_cond, {"$nor": [has_ml_cond]}]}
-            elif method_filter == "ML Only":
-                query = {"$and": [has_ml_cond, {"$nor": [has_rules_cond]}]}
-            elif method_filter == "Hybrid Only":
-                query = {"$and": [has_rules_cond, has_ml_cond]}
+        tf_match = self._build_timeframe_match(timeframe)
+        query: Dict[str, Any] = self._combine_queries(tf_match, {})
 
         incident_records = self._find_many(
             self.incidents_collection_name,
@@ -682,7 +1068,9 @@ class DashboardQueryAdapter:
 
         derived_query = self._malicious_match_query()
         if query:
-            derived_query = {"$and": [derived_query, query]}
+            derived_query = self._combine_queries(derived_query, query)
+        else:
+            derived_query = self._combine_queries(tf_match, derived_query)
 
         derived = self._find_many(
             self.requests_collection_name,
@@ -769,6 +1157,9 @@ class DashboardQueryAdapter:
         attack_type = _normalize_attack_type(incident.get("attack_type"))
         risk_score = _safe_int(incident.get("risk_score"), 0)
         prediction_score = _safe_number(incident.get("prediction_score"), 0.0)
+        detection_sources = incident.get("detection_sources") or []
+        if not isinstance(detection_sources, list):
+            detection_sources = [str(detection_sources)]
 
         matched_rule_ids = incident.get("matched_rule_ids") or []
         if not isinstance(matched_rule_ids, list):
@@ -796,12 +1187,14 @@ class DashboardQueryAdapter:
             reason_parts.append(f"classified as {attack_type}")
         if matched_rule_ids:
             reason_parts.append(f"matched rules: {', '.join(str(x) for x in matched_rule_ids[:4])}")
+        if detection_sources:
+            reason_parts.append(f"hybrid sources: {', '.join(str(x) for x in detection_sources)}")
         if indicator_tokens:
             reason_parts.append(f"contains suspicious tokens ({', '.join(indicator_tokens[:5])})")
         reason_parts.append(f"risk score {risk_score}")
         reason_parts.append(f"prediction confidence {round(prediction_score * 100, 1)}%")
 
-        return "This request was flagged because it was " + "; ".join(reason_parts) + "."
+        return "This request was flagged by the hybrid risk engine because it was " + "; ".join(reason_parts) + "."
 
     def get_response_recommendations(self, incident: Mapping[str, Any], patterns: Optional[List[Mapping[str, Any]]] = None) -> List[str]:
         if patterns:
@@ -811,6 +1204,58 @@ class DashboardQueryAdapter:
                     return [str(x) for x in remediation if str(x).strip()]
 
         return _build_default_response_by_attack_type(str(incident.get("attack_type", "unknown")))
+
+    def find_similar_requests(self, request_embedding: List[float], limit: int = 5) -> List[Dict[str, Any]]:
+        """Find historically similar log entries using MongoDB Vector Search ($vectorSearch).
+
+        Delegates to ``find_similar_logs`` in ``mongodb_queries``, which issues a
+        ``$vectorSearch`` aggregation against the requests/unified_logs collection.
+        Returns ``[]`` when the DB is unavailable or the search returns no results.
+        """
+        limit = max(1, int(limit))
+        embedding = [] if request_embedding is None else [float(x) for x in request_embedding if isinstance(x, (int, float))]
+
+        if not embedding:
+            return []
+
+        if self.db is None or mongodb_queries is None:
+            return []
+
+        if not hasattr(mongodb_queries, "find_similar_logs"):
+            return []
+
+        # Prefer requests collection, fallback to unified_logs.
+        for collection_name in (self.requests_collection_name, "unified_logs"):
+            if not collection_name:
+                continue
+            try:
+                col = self._collection(collection_name)
+                if col is None:
+                    continue
+                rows = mongodb_queries.find_similar_logs(col, embedding, limit=limit)
+                if rows:
+                    return [self._normalize_similar_request(row) for row in rows]
+            except Exception:
+                continue
+
+        return []
+
+
+    @staticmethod
+    def _normalize_similar_request(row: Mapping[str, Any]) -> Dict[str, Any]:
+        """Normalize a raw similar-log result row returned by find_similar_logs."""
+        score = _safe_number(row.get("score"), 0.0)
+        similarity_score = max(0.0, min(1.0, score))
+        return {
+            "event_id": str(row.get("event_id") or ""),
+            "timestamp": _timestamp_to_text(row.get("timestamp")),
+            "ip": str(row.get("source_ip") or "Unknown"),
+            "uri": str(row.get("uri") or "-"),
+            "risk_score": _safe_int(row.get("risk_score"), 0),
+            "risk_level": str(row.get("risk_level") or ""),
+            "final_label": str(row.get("final_label") or ""),
+            "similarity_score": round(similarity_score, 4),
+        }
 
     # -------------
     # Internals
@@ -838,18 +1283,20 @@ class DashboardQueryAdapter:
         except Exception:
             return []
 
-    def _query_attack_type_distribution(self) -> List[Dict[str, Any]]:
+    def _query_attack_type_distribution(self, timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.db is None or mongodb_queries is None:
             return []
         if not hasattr(mongodb_queries, "get_attack_type_distribution"):
             return []
+        cutoff = self._parse_timeframe(timeframe)
         try:
             if self.requests_collection_name:
                 return mongodb_queries.get_attack_type_distribution(
                     self.db,
                     requests_collection=self.requests_collection_name,
+                    cutoff=cutoff,
                 )
-            return mongodb_queries.get_attack_type_distribution(self.db)
+            return mongodb_queries.get_attack_type_distribution(self.db, cutoff=cutoff)
         except TypeError:
             try:
                 return mongodb_queries.get_attack_type_distribution(self.db)
@@ -858,19 +1305,21 @@ class DashboardQueryAdapter:
         except Exception:
             return []
 
-    def _query_top_attacking_ips(self, limit: int) -> List[Dict[str, Any]]:
+    def _query_top_attacking_ips(self, limit: int, timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.db is None or mongodb_queries is None:
             return []
         if not hasattr(mongodb_queries, "get_top_attacking_ips"):
             return []
+        cutoff = self._parse_timeframe(timeframe)
         try:
             if self.requests_collection_name:
                 return mongodb_queries.get_top_attacking_ips(
                     self.db,
                     limit=limit,
                     requests_collection=self.requests_collection_name,
+                    cutoff=cutoff,
                 )
-            return mongodb_queries.get_top_attacking_ips(self.db, limit=limit)
+            return mongodb_queries.get_top_attacking_ips(self.db, limit=limit, cutoff=cutoff)
         except TypeError:
             try:
                 return mongodb_queries.get_top_attacking_ips(self.db, limit=limit)
@@ -879,21 +1328,24 @@ class DashboardQueryAdapter:
         except Exception:
             return []
 
-    def _query_attack_timeline(self) -> List[Dict[str, Any]]:
+    def _query_attack_timeline(self, bucket_size: int = 5, unit: str = "minute", timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.db is None or mongodb_queries is None:
             return []
         if not hasattr(mongodb_queries, "generate_attack_timeline"):
             return []
+        cutoff = self._parse_timeframe(timeframe)
         try:
             if self.requests_collection_name:
                 return mongodb_queries.generate_attack_timeline(
                     self.db,
                     ip=None,
-                    hours_bucket=1,
+                    bucket_size=bucket_size,
+                    unit=unit,
                     limit=1000,
                     requests_collection=self.requests_collection_name,
+                    cutoff=cutoff,
                 )
-            return mongodb_queries.generate_attack_timeline(self.db, ip=None, hours_bucket=1, limit=1000)
+            return mongodb_queries.generate_attack_timeline(self.db, ip=None, bucket_size=bucket_size, unit=unit, limit=1000, cutoff=cutoff)
         except TypeError:
             try:
                 return mongodb_queries.generate_attack_timeline(self.db, ip=None, hours_bucket=1, limit=1000)
@@ -902,20 +1354,39 @@ class DashboardQueryAdapter:
         except Exception:
             return []
 
-    def _query_attack_campaigns(self, *, min_attacks: int, limit: int) -> List[Dict[str, Any]]:
+    def _query_ip_blast_radius(self, ip: str) -> List[Dict[str, Any]]:
+        if self.db is None or mongodb_queries is None:
+            return []
+        if not hasattr(mongodb_queries, "get_ip_blast_radius"):
+            return []
+        try:
+            if self.requests_collection_name:
+                return mongodb_queries.get_ip_blast_radius(
+                    self.db,
+                    ip=ip,
+                    requests_collection=self.requests_collection_name,
+                )
+            return mongodb_queries.get_ip_blast_radius(self.db, ip=ip)
+        except Exception:
+            return []
+
+    def _query_attack_campaigns(self, *, min_attacks: int, min_attack_types: int = 3, limit: int, timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
         if self.db is None or mongodb_queries is None:
             return []
         if not hasattr(mongodb_queries, "detect_attack_campaigns"):
             return []
+        cutoff = self._parse_timeframe(timeframe)
         try:
             if self.requests_collection_name:
                 return mongodb_queries.detect_attack_campaigns(
                     self.db,
                     min_attacks=min_attacks,
+                    min_attack_types=min_attack_types,
                     limit=limit,
                     requests_collection=self.requests_collection_name,
+                    cutoff=cutoff,
                 )
-            return mongodb_queries.detect_attack_campaigns(self.db, min_attacks=min_attacks, limit=limit)
+            return mongodb_queries.detect_attack_campaigns(self.db, min_attacks=min_attacks, min_attack_types=min_attack_types, limit=limit, cutoff=cutoff)
         except TypeError:
             try:
                 return mongodb_queries.detect_attack_campaigns(self.db, min_attacks=min_attacks, limit=limit)
@@ -969,6 +1440,7 @@ class DashboardQueryAdapter:
             self.requests_collection_name = self._pick_collection_name("requests", "logs")
             self.incidents_collection_name = self._pick_collection_name("incidents")
             self.patterns_collection_name = self._pick_collection_name("attack_patterns")
+            self.campaigns_collection_name = self._pick_collection_name("active_campaigns") or "active_campaigns"
 
             self._status.update(
                 {
@@ -1092,7 +1564,7 @@ class DashboardQueryAdapter:
         return "low"
 
     def _build_timeline_from_records(self, records: List[Mapping[str, Any]]) -> List[Dict[str, Any]]:
-        buckets: Dict[str, int] = {}
+        buckets: Dict[tuple[str, str], int] = {}
         for record in records:
             if not _is_malicious_record(record):
                 continue
@@ -1102,11 +1574,18 @@ class DashboardQueryAdapter:
             if parsed is None:
                 continue
 
-            bucket = parsed.replace(minute=0, second=0, microsecond=0)
+            # 5-minute bucketing for nicer charts:
+            minute_rounded = (parsed.minute // 5) * 5
+            bucket = parsed.replace(minute=minute_rounded, second=0, microsecond=0)
             key = bucket.isoformat()
-            buckets[key] = buckets.get(key, 0) + 1
 
-        out = [{"timestamp": key, "count": count} for key, count in sorted(buckets.items())]
+            attack_type = _normalize_attack_type(_first_non_empty(record, "attack_type", "prediction.attack_type", "ml_attack_type"))
+            buckets[(key, attack_type)] = buckets.get((key, attack_type), 0) + 1
+
+        out = [
+            {"timestamp": ts, "attack_type": at, "count": count}
+            for (ts, at), count in sorted(buckets.items(), key=lambda x: x[0])
+        ]
         return out
 
     def _finalize_top_ips(self, grouped_rows: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
@@ -1306,6 +1785,8 @@ class DashboardQueryAdapter:
                 }
             )
 
+        from src.schemas.mongodb_schema import flat_to_nested
+        requests = [flat_to_nested(row) for row in requests]
         incidents = [row for row in requests if _is_malicious_record(row)]
 
         attack_patterns = [

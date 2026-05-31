@@ -25,13 +25,46 @@ def _safe_int(value: Any, default: int = 0) -> int:
 def _malicious_match_query() -> Dict[str, Any]:
     return {
         "$or": [
-            {"prediction.label": {"$in": ["malicious", "suspicious", "attack"]}},
-            {"ml_label": {"$in": ["malicious", "suspicious", "attack"]}},
-            {"ml_should_alert": True},
-            {"should_alert": True},
-            {"attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
-            {"ml_attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
-            {"risk_score": {"$gte": 70}},
+            {"detection.ml.label": {"$in": ["malicious", "suspicious", "attack"]}},
+            {"detection.ml.should_alert": True},
+            {"scoring.should_alert": True},
+            {"detection.rules.attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
+            {"detection.ml.attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
+            {"scoring.risk_score": {"$gte": 70}},
+        ]
+    }
+
+
+def _timeframe_filter(cutoff: Any) -> Dict[str, Any]:
+    if not cutoff:
+        return {}
+    return {
+        "$or": [
+            {
+                "$and": [
+                    {"timestamp": {"$type": "date"}},
+                    {"timestamp": {"$gte": cutoff}}
+                ]
+            },
+            {
+                "$and": [
+                    {"timestamp": {"$type": "string"}},
+                    {
+                        "$expr": {
+                            "$gte": [
+                                {
+                                    "$dateFromString": {
+                                        "dateString": "$timestamp",
+                                        "onError": None,
+                                        "onNull": None
+                                    }
+                                },
+                                cutoff
+                            ]
+                        }
+                    }
+                ]
+            }
         ]
     }
 
@@ -175,17 +208,17 @@ def find_similar_logs(
                 "_id": 0,
                 "event_id": 1,
                 "timestamp": 1,
-                "source_ip": 1,
-                "http_method": 1,
-                "original_url": 1,
-                "uri": 1,
-                "query_string": 1,
-                "status_code": 1,
-                "user_agent": 1,
-                "risk_score": 1,
-                "risk_level": 1,
-                "final_label": 1,
-                "should_alert": 1,
+                "source_ip": "$request.source_ip",
+                "http_method": "$request.method",
+                "original_url": "$request.uri",
+                "uri": "$request.uri",
+                "query_string": "$request.query_string",
+                "status_code": "$request.status_code",
+                "user_agent": "$request.user_agent",
+                "risk_score": "$scoring.risk_score",
+                "risk_level": "$scoring.risk_level",
+                "final_label": "$scoring.final_label",
+                "should_alert": "$scoring.should_alert",
                 "score": {"$meta": "vectorSearchScore"}
             }
         }
@@ -205,23 +238,23 @@ def get_ip_threat_scores(collection, limit: int = 10) -> List[Dict[str, Any]]:
     pipeline = [
         {
             "$group": {
-                "_id": "$source_ip",
+                "_id": "$request.source_ip",
                 "total_requests": {"$sum": 1},
                 "total_alerts": {
                     "$sum": {
                         "$cond": [
                             {"$or": [
-                                {"$eq": ["$should_alert", True]},
-                                {"$in": ["$final_label", ["malicious", "suspicious"]]}
+                                {"$eq": ["$scoring.should_alert", True]},
+                                {"$in": ["$scoring.final_label", ["malicious", "suspicious"]]}
                             ]},
                             1,
                             0
                         ]
                     }
                 },
-                "max_risk_score": {"$max": "$risk_score"},
-                "avg_risk_score": {"$avg": "$risk_score"},
-                "triggered_rules": {"$addToSet": "$rule_id"}
+                "max_risk_score": {"$max": "$scoring.risk_score"},
+                "avg_risk_score": {"$avg": "$scoring.risk_score"},
+                "triggered_rules": {"$addToSet": "$detection.rules.matched_ids"}
             }
         },
         {
@@ -263,16 +296,31 @@ def get_attack_type_distribution(
     *,
     requests_collection: str = "requests",
     limit: int = 20,
+    cutoff: Optional[datetime] = None,
 ) -> List[Dict[str, Any]]:
     collection = _collection(db, requests_collection)
     if collection is None:
         return []
 
+    match_query = _malicious_match_query()
+    if cutoff:
+        match_query = {
+            "$and": [
+                match_query,
+                _timeframe_filter(cutoff)
+            ]
+        }
+
     pipeline = [
-        {"$match": _malicious_match_query()},
+        {"$match": match_query},
         {
             "$group": {
-                "_id": {"$ifNull": ["$attack_type", {"$ifNull": ["$ml_attack_type", "Unknown"]}]},
+                "_id": {
+                    "$ifNull": [
+                        "$detection.rules.attack_type",
+                        {"$ifNull": ["$detection.ml.attack_type", "Unknown"]}
+                    ]
+                },
                 "count": {"$sum": 1},
             }
         },
@@ -291,19 +339,29 @@ def get_top_attacking_ips(
     limit: int = 10,
     *,
     requests_collection: str = "requests",
+    cutoff: Optional[datetime] = None,
 ) -> List[Dict[str, Any]]:
     collection = _collection(db, requests_collection)
     if collection is None:
         return []
 
+    match_query = _malicious_match_query()
+    if cutoff:
+        match_query = {
+            "$and": [
+                match_query,
+                _timeframe_filter(cutoff)
+            ]
+        }
+
     pipeline = [
-        {"$match": _malicious_match_query()},
+        {"$match": match_query},
         {
             "$group": {
-                "_id": {"$ifNull": ["$source_ip", "$ip", "Unknown"]},
+                "_id": {"$ifNull": ["$request.source_ip", "Unknown"]},
                 "total_attacks": {"$sum": 1},
-                "attack_types": {"$addToSet": "$attack_type"},
-                "target_uris": {"$addToSet": "$uri"},
+                "attack_types": {"$addToSet": "$detection.rules.attack_type"},
+                "target_uris": {"$addToSet": "$request.uri"},
                 "first_seen": {"$min": "$timestamp"},
                 "last_seen": {"$max": "$timestamp"},
             }
@@ -320,26 +378,38 @@ def get_top_attacking_ips(
 
 def detect_attack_campaigns(
     db: Any,
-    min_attacks: int = 10,
+    min_attacks: int = 50,
+    min_attack_types: int = 3,
     limit: int = 10,
     *,
     requests_collection: str = "requests",
+    cutoff: Optional[datetime] = None,
 ) -> List[Dict[str, Any]]:
     collection = _collection(db, requests_collection)
     if collection is None:
         return []
 
-    threshold = max(1, _safe_int(min_attacks, 10))
+    threshold = max(1, _safe_int(min_attacks, 50))
+    min_types = max(1, _safe_int(min_attack_types, 3))
     max_limit = max(1, _safe_int(limit, 10))
 
+    match_query = _malicious_match_query()
+    if cutoff:
+        match_query = {
+            "$and": [
+                match_query,
+                _timeframe_filter(cutoff)
+            ]
+        }
+
     pipeline = [
-        {"$match": _malicious_match_query()},
+        {"$match": match_query},
         {
             "$group": {
-                "_id": {"$ifNull": ["$source_ip", "$ip", "Unknown"]},
+                "_id": {"$ifNull": ["$request.source_ip", "Unknown"]},
                 "total_attacks": {"$sum": 1},
-                "attack_types": {"$addToSet": "$attack_type"},
-                "target_uris": {"$addToSet": "$uri"},
+                "attack_types": {"$addToSet": "$detection.rules.attack_type"},
+                "target_uris": {"$addToSet": "$request.uri"},
                 "first_seen": {"$min": "$timestamp"},
                 "last_seen": {"$max": "$timestamp"},
             }
@@ -352,11 +422,8 @@ def detect_attack_campaigns(
         },
         {
             "$match": {
-                "$or": [
-                    {"total_attacks": {"$gte": threshold}},
-                    {"attack_type_count": {"$gt": 1}},
-                    {"target_count": {"$gt": 1}},
-                ]
+                "total_attacks": {"$gte": threshold},
+                "attack_type_count": {"$gte": min_types},
             }
         },
         {"$sort": {"total_attacks": -1}},
@@ -369,13 +436,83 @@ def detect_attack_campaigns(
         return []
 
 
+def get_ip_blast_radius(
+    db: Any,
+    ip: str,
+    limit: int = 10,
+    *,
+    requests_collection: str = "requests",
+) -> List[Dict[str, Any]]:
+    collection = _collection(db, requests_collection)
+    if collection is None or not ip:
+        return []
+
+    match_query = {
+        "request.source_ip": str(ip)
+    }
+    max_limit = max(1, _safe_int(limit, 10))
+
+    pipeline = [
+        {"$match": match_query},
+        {
+            "$group": {
+                "_id": {"$ifNull": ["$request.uri", "Unknown"]},
+                "uri_count": {"$sum": 1}
+            }
+        },
+        {
+            "$group": {
+                "_id": None,
+                "grand_total": {"$sum": "$uri_count"},
+                "uris": {
+                    "$push": {
+                        "uri": "$_id",
+                        "uri_count": "$uri_count"
+                    }
+                }
+            }
+        },
+        {"$unwind": "$uris"},
+        {
+            "$project": {
+                "_id": 0,
+                "uri": "$uris.uri",
+                "count": "$uris.uri_count",
+                "percentage": {
+                    "$cond": [
+                        {"$eq": ["$grand_total", 0]},
+                        0.0,
+                        {
+                            "$multiply": [
+                                {"$divide": ["$uris.uri_count", "$grand_total"]},
+                                100.0
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        {"$sort": {"count": -1}},
+        {"$limit": max_limit}
+    ]
+
+    try:
+        return [dict(row) for row in collection.aggregate(pipeline, allowDiskUse=True)]
+    except Exception as e:
+        logging.error(f"Error in get_ip_blast_radius: {e}")
+        return []
+
+
 def generate_attack_timeline(
     db: Any,
     ip: Optional[str] = None,
-    hours_bucket: int = 1,
+    bucket_size: int = 1,
+    unit: str = "hour",
     limit: int = 100,
     *,
+    hours_bucket: Optional[int] = None,
     requests_collection: str = "requests",
+    cutoff: Optional[datetime] = None,
 ) -> List[Dict[str, Any]]:
     collection = _collection(db, requests_collection)
     if collection is None:
@@ -383,12 +520,18 @@ def generate_attack_timeline(
 
     match_query: Dict[str, Any] = dict(_malicious_match_query())
     if ip:
-        match_query["$or"] = [
-            {"source_ip": str(ip)},
-            {"ip": str(ip)}
-        ]
+        match_query["request.source_ip"] = str(ip)
 
-    bucket_size = max(1, _safe_int(hours_bucket, 1))
+    if cutoff:
+        match_query = {
+            "$and": [
+                match_query,
+                _timeframe_filter(cutoff)
+            ]
+        }
+
+    b_size = max(1, _safe_int(hours_bucket if hours_bucket is not None else bucket_size, 1))
+    t_unit = str(unit) if hours_bucket is None else "hour"
     max_limit = max(1, _safe_int(limit, 100))
 
     pipeline = [
@@ -402,6 +545,12 @@ def generate_attack_timeline(
                         "onError": None,
                         "onNull": None,
                     }
+                },
+                "_attack_type": {
+                    "$ifNull": [
+                        "$detection.rules.attack_type",
+                        {"$ifNull": ["$detection.ml.attack_type", "Unknown"]}
+                    ]
                 }
             }
         },
@@ -409,18 +558,28 @@ def generate_attack_timeline(
         {
             "$group": {
                 "_id": {
-                    "$dateTrunc": {
-                        "date": "$_timeline_ts",
-                        "unit": "hour",
-                        "binSize": bucket_size,
-                    }
+                    "timestamp": {
+                        "$dateTrunc": {
+                            "date": "$_timeline_ts",
+                            "unit": t_unit,
+                            "binSize": b_size,
+                        }
+                    },
+                    "attack_type": "$_attack_type"
                 },
                 "count": {"$sum": 1},
             }
         },
-        {"$sort": {"_id": 1}},
+        {"$sort": {"_id.timestamp": 1, "_id.attack_type": 1}},
         {"$limit": max_limit},
-        {"$project": {"_id": 0, "timestamp": "$_id", "count": 1}},
+        {
+            "$project": {
+                "_id": 0,
+                "timestamp": "$_id.timestamp",
+                "attack_type": "$_id.attack_type",
+                "count": 1
+            }
+        },
     ]
 
     try:
@@ -458,15 +617,15 @@ def get_threat_timeline(collection, interval: str = "hour") -> List[Dict[str, An
                     "$sum": {
                         "$cond": [
                             {"$or": [
-                                {"$eq": ["$should_alert", True]},
-                                {"$in": ["$final_label", ["malicious", "suspicious"]]}
+                                {"$eq": ["$scoring.should_alert", True]},
+                                {"$in": ["$scoring.final_label", ["malicious", "suspicious"]]}
                             ]},
                             1,
                             0
                         ]
                     }
                 },
-                "avg_risk_score": {"$avg": "$risk_score"}
+                "avg_risk_score": {"$avg": "$scoring.risk_score"}
             }
         },
         {
@@ -520,3 +679,369 @@ def search_logs_by_text(
         return []
     query_vector = embedding_engine.get_embedding(query_text)
     return find_similar_logs(collection, query_vector, limit, filter_dict)
+
+
+def get_materialized_campaigns(
+    db: Any,
+    *,
+    campaigns_collection: str = "active_campaigns",
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    """Read pre-computed campaigns from the Atlas-materialized view.
+    
+    The 'active_campaigns' collection is populated by an Atlas Scheduled
+    Trigger running a $merge pipeline every 60 seconds. This function
+    simply reads the latest snapshot — no heavy aggregation needed.
+    """
+    collection = _collection(db, campaigns_collection)
+    if collection is None:
+        return []
+    try:
+        return list(
+            collection.find(
+                {"status": "active"},
+                {"_id": 0},
+            )
+            .sort("total_attacks", -1)
+            .limit(max(1, _safe_int(limit, 50)))
+        )
+    except Exception as e:
+        logging.error(f"Error during get_materialized_campaigns: {e}")
+        return []
+
+
+def get_campaigns_metadata(
+    db: Any,
+    *,
+    campaigns_collection: str = "active_campaigns",
+) -> Dict[str, Any]:
+    """Return metadata about the materialized campaigns collection."""
+    collection = _collection(db, campaigns_collection)
+    if collection is None:
+        return {"count": 0, "last_updated": None}
+    try:
+        count = collection.count_documents({"status": "active"})
+        latest = collection.find_one(
+            {}, {"materialized_at": 1}, sort=[("materialized_at", -1)]
+        )
+        return {
+            "count": count,
+            "last_updated": latest.get("materialized_at") if latest else None,
+        }
+    except Exception as e:
+        logging.error(f"Error during get_campaigns_metadata: {e}")
+        return {"count": 0, "last_updated": None}
+
+
+def find_similar_false_positives(
+    collection,
+    query_vector: List[float],
+    limit: int = 1,
+    index_name: str = "vector_index",
+) -> List[Dict[str, Any]]:
+    """Perform Atlas Vector Search to find similar false positives."""
+    if not query_vector:
+        return []
+
+    pipeline = [
+        {
+            "$vectorSearch": {
+                "index": index_name,
+                "path": "embedding",
+                "queryVector": query_vector,
+                "numCandidates": max(limit * 10, 20),
+                "limit": limit,
+            }
+        },
+        {
+            "$project": {
+                "_id": 1,
+                "notes": 1,
+                "incident_id": 1,
+                "score": {"$meta": "vectorSearchScore"},
+            }
+        },
+    ]
+    try:
+        return list(collection.aggregate(pipeline))
+    except Exception as e:
+        logging.error(f"Error in find_similar_false_positives: {e}")
+        return []
+
+
+def calculate_attack_baselines(db: Any, requests_collection: str = "requests", baseline_collection: str = "attack_baselines") -> Dict[str, Any]:
+    """Runs aggregation over requests to calculate baseline statistics for each hour of the week per endpoint group."""
+    coll_req = _collection(db, requests_collection)
+    if coll_req is None:
+        return {"status": "skipped", "reason": "database/collection not available"}
+
+    pipeline = [
+        {
+            "$match": {
+                "$or": [
+                    {"scoring.should_alert": True},
+                    {"scoring.final_label": {"$in": ["malicious", "suspicious"]}},
+                ]
+            }
+        },
+        {
+            "$addFields": {
+                "date_obj": {
+                    "$cond": {
+                        "if": {"$eq": [{"$type": "$timestamp"}, "date"]},
+                        "then": "$timestamp",
+                        "else": {
+                            "$dateFromString": {
+                                "dateString": "$timestamp",
+                                "onError": None,
+                                "onNull": None,
+                             }
+                        },
+                    }
+                },
+                "uri_val": {"$ifNull": ["$request.uri", "$uri"]}
+            }
+        },
+        {"$match": {"date_obj": {"$ne": None}}},
+        {
+            "$project": {
+                "hour_of_week": {
+                    "$add": [
+                        {"$multiply": [{"$subtract": [{"$dayOfWeek": "$date_obj"}, 1]}, 24]},
+                        {"$hour": "$date_obj"},
+                    ]
+                },
+                "endpoint_group": {
+                    "$cond": {
+                        "if": { "$regexMatch": { "input": {"$ifNull": ["$uri_val", ""]}, "regex": "backup|db|admin|config|settings", "options": "i" } },
+                        "then": "sensitive",
+                        "else": {
+                            "$let": {
+                                "vars": {
+                                    "parts": { "$split": [{"$ifNull": ["$uri_val", ""]}, "/"] }
+                                },
+                                "in": {
+                                    "$cond": {
+                                        "if": { "$gt": [{ "$size": "$$parts" }, 1] },
+                                        "then": {
+                                            "$cond": {
+                                                "if": { "$eq": [{ "$arrayElemAt": ["$$parts", 1] }, "api"] },
+                                                "then": {
+                                                    "$cond": {
+                                                        "if": { "$gt": [{ "$size": "$$parts" }, 2] },
+                                                        "then": { "$concat": ["api_", { "$arrayElemAt": ["$$parts", 2] }] },
+                                                        "else": "api"
+                                                    }
+                                                },
+                                                "else": { "$arrayElemAt": ["$$parts", 1] }
+                                            }
+                                        },
+                                        "else": "root"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "week_year": {
+                    "$concat": [
+                        {"$toString": {"$isoWeekYear": "$date_obj"}},
+                        "-",
+                        {"$toString": {"$isoWeek": "$date_obj"}},
+                    ]
+                },
+            }
+        },
+        {
+            "$group": {
+                "_id": {
+                    "hour_of_week": "$hour_of_week",
+                    "endpoint_group": "$endpoint_group",
+                    "week_year": "$week_year"
+                },
+                "count": {"$sum": 1},
+            }
+        },
+        {
+            "$group": {
+                "_id": {
+                    "hour_of_week": "$_id.hour_of_week",
+                    "endpoint_group": "$_id.endpoint_group"
+                },
+                "mean": {"$avg": "$count"},
+                "std_dev": {"$stdDevPop": "$count"},
+            }
+        },
+        {
+            "$merge": {
+                "into": baseline_collection,
+                "on": "_id",
+                "whenMatched": "merge",
+                "whenNotMatched": "insert",
+            }
+        },
+    ]
+
+    try:
+        coll_req.aggregate(pipeline)
+        return {"status": "success", "message": "Baseline aggregation run successfully"}
+    except Exception as e:
+        logging.error(f"Error in calculate_attack_baselines: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+def calculate_endpoint_min_floors(
+    db: Any,
+    requests_collection: str = "requests",
+    min_floors_collection: str = "endpoint_min_floors",
+    percentile: float = 0.90,
+    scale_factor: float = 0.10,
+) -> Dict[str, Any]:
+    """
+    Groups requests by endpoint_group and hourly buckets, sorts them,
+    and calculates the given percentile scaled by scale_factor as min_floor.
+    """
+    coll_req = _collection(db, requests_collection)
+    if coll_req is None:
+        return {"status": "skipped", "reason": "database/collection not available"}
+
+    pipeline = [
+        {
+            "$addFields": {
+                "date_obj": {
+                    "$cond": {
+                        "if": {"$eq": [{"$type": "$timestamp"}, "date"]},
+                        "then": "$timestamp",
+                        "else": {
+                            "$dateFromString": {
+                                "dateString": "$timestamp",
+                                "onError": None,
+                                "onNull": None,
+                            }
+                        },
+                    }
+                },
+                "uri_val": {"$ifNull": ["$request.uri", "$uri"]}
+            }
+        },
+        {"$match": {"date_obj": {"$ne": None}}},
+        {
+            "$addFields": {
+                "endpoint_group": {
+                    "$cond": {
+                        "if": { "$regexMatch": { "input": {"$ifNull": ["$uri_val", ""]}, "regex": "backup|db|admin|config|settings", "options": "i" } },
+                        "then": "sensitive",
+                        "else": {
+                            "$let": {
+                                "vars": {
+                                    "parts": { "$split": [{"$ifNull": ["$uri_val", ""]}, "/"] }
+                                },
+                                "in": {
+                                    "$cond": {
+                                        "if": { "$gt": [{ "$size": "$$parts" }, 1] },
+                                        "then": {
+                                            "$cond": {
+                                                "if": { "$eq": [{ "$arrayElemAt": ["$$parts", 1] }, "api"] },
+                                                "then": {
+                                                    "$cond": {
+                                                        "if": { "$gt": [{ "$size": "$$parts" }, 2] },
+                                                        "then": { "$concat": ["api_", { "$arrayElemAt": ["$$parts", 2] }] },
+                                                        "else": "api"
+                                                    }
+                                                },
+                                                "else": { "$arrayElemAt": ["$$parts", 1] }
+                                            }
+                                        },
+                                        "else": "root"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "hour_bucket": {
+                    "$dateToString": {
+                        "format": "%Y-%m-%dT%H:00:00Z",
+                        "date": "$date_obj"
+                    }
+                }
+            }
+        },
+        {
+            "$group": {
+                "_id": {
+                    "endpoint_group": "$endpoint_group",
+                    "hour_bucket": "$hour_bucket"
+                },
+                "count": {"$sum": 1}
+            }
+        },
+        {
+            "$sort": {"count": 1}
+        },
+        {
+            "$group": {
+                "_id": "$_id.endpoint_group",
+                "counts": {"$push": "$count"}
+            }
+        },
+        {
+            "$project": {
+                "_id": 1,
+                "min_floor": {
+                    "$let": {
+                        "vars": {
+                            "size": {"$size": "$counts"},
+                            "index": {
+                                "$floor": {
+                                    "$multiply": [
+                                        {"$size": "$counts"},
+                                        percentile
+                                    ]
+                                }
+                            }
+                        },
+                        "in": {
+                            "$let": {
+                                "vars": {
+                                    "p_val": {
+                                        "$arrayElemAt": [
+                                            "$counts",
+                                            {"$cond": [
+                                                {"$gte": ["$$index", "$$size"]},
+                                                {"$subtract": ["$$size", 1]},
+                                                "$$index"
+                                            ]}
+                                        ]
+                                    }
+                                },
+                                "in": {
+                                    "$max": [
+                                        2,
+                                        {"$floor": {"$multiply": ["$$p_val", scale_factor]}}
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "$merge": {
+                "into": min_floors_collection,
+                "on": "_id",
+                "whenMatched": "merge",
+                "whenNotMatched": "insert"
+            }
+        }
+    ]
+
+    try:
+        coll_req.aggregate(pipeline)
+        return {"status": "success", "message": "Min floors calculated and stored successfully"}
+    except Exception as e:
+        logging.error(f"Error in calculate_endpoint_min_floors: {e}")
+        return {"status": "error", "message": str(e)}
+
+

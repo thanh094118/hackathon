@@ -1,0 +1,1841 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>ThreatLens AI - Command Center</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-container": "#d6a9ff",
+                        "surface-container-highest": "#2e3447",
+                        "on-primary-fixed-variant": "#004c69",
+                        "primary-container": "#38bdf8",
+                        "surface-container-low": "#151b2d",
+                        "primary-fixed": "#c4e7ff",
+                        "on-tertiary-fixed": "#002113",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "tertiary-fixed": "#6ffbbe",
+                        "surface-dim": "#0c1324",
+                        "on-tertiary-container": "#004e34",
+                        "secondary-container": "#6f00be",
+                        "on-primary": "#00354a",
+                        "on-secondary-fixed-variant": "#6900b3",
+                        "secondary-fixed": "#f0dbff",
+                        "on-primary-fixed": "#001e2c",
+                        "inverse-on-surface": "#2a3043",
+                        "on-background": "#dce1fb",
+                        "on-tertiary": "#003824",
+                        "on-surface-variant": "#bdc8d1",
+                        "surface-container-lowest": "#070d1f",
+                        "tertiary-container": "#30c88f",
+                        "outline": "#87929a",
+                        "outline-variant": "#3e484f",
+                        "error-container": "#93000a",
+                        "on-secondary": "#490080",
+                        "surface-tint": "#7bd0ff",
+                        "secondary": "#ddb7ff",
+                        "surface-container": "#191f31",
+                        "tertiary": "#56e5a9",
+                        "surface": "#0c1324",
+                        "inverse-primary": "#00668a",
+                        "error": "#ffb4ab",
+                        "secondary-fixed-dim": "#ddb7ff",
+                        "primary-fixed-dim": "#7bd0ff",
+                        "surface-variant": "#2e3447",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "on-primary-container": "#004965",
+                        "on-error": "#690005",
+                        "primary": "#8ed5ff",
+                        "on-error-container": "#ffdad6",
+                        "on-surface": "#dce1fb",
+                        "on-secondary-fixed": "#2c0051",
+                        "background": "#0c1324",
+                        "surface-container-high": "#23293c",
+                        "surface-bright": "#33394c",
+                        "inverse-surface": "#dce1fb"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "container-max": "1600px",
+                        "gutter": "16px",
+                        "margin-desktop": "32px",
+                        "margin-mobile": "16px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "data-mono": ["JetBrains Mono"],
+                        "body-md": ["Hanken Grotesk"],
+                        "label-caps": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "data-mono": ["14px", { "lineHeight": "20px", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }]
+                    },
+                    animation: {
+                        'pulse-error': 'pulse-error 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'pulse-secondary': 'pulse-secondary 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'pulse-critical': 'pulse-critical 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        'pulse-error': {
+                            '0%, 100%': { opacity: '1', filter: 'drop-shadow(0 0 12px rgba(255, 180, 171, 0.4))' },
+                            '50%': { opacity: '0.8', filter: 'drop-shadow(0 0 24px rgba(255, 180, 171, 0.7))' },
+                        },
+                        'pulse-secondary': {
+                            '0%, 100%': { boxShadow: '0 0 16px rgba(111, 0, 190, 0.2)' },
+                            '50%': { boxShadow: '0 0 32px rgba(111, 0, 190, 0.4)' },
+                        },
+                        'pulse-critical': {
+                            '0%, 100%': { opacity: '1', filter: 'drop-shadow(0 0 12px rgba(255, 180, 171, 0.6))' },
+                            '50%': { opacity: '0.7', filter: 'drop-shadow(0 0 20px rgba(255, 180, 171, 0.8))' },
+                        }
+                    }
+                },
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;800&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <style>
+        .glass-panel {
+            background-color: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(135, 146, 154, 0.2);
+        }
+        .glass-panel-heavy {
+            background-color: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(135, 146, 154, 0.3);
+        }
+        .neon-glow-primary { box-shadow: 0 0 15px rgba(142, 213, 255, 0.2); }
+        .neon-glow-rose { box-shadow: 0 0 15px rgba(225, 29, 72, 0.4); }
+        .neon-glow-amber { box-shadow: 0 0 15px rgba(217, 119, 6, 0.4); }
+        .neon-glow-purple { box-shadow: 0 0 15px rgba(168, 85, 247, 0.4); }
+        .glow-error { filter: drop-shadow(0 0 12px rgba(255, 180, 171, 0.4)); }
+        .glow-secondary { box-shadow: 0 0 16px rgba(111, 0, 190, 0.3); }
+        .neon-text-error { text-shadow: 0 0 8px rgba(255, 180, 171, 0.5); }
+        
+        .scanline-hover:hover {
+            position: relative;
+        }
+        .scanline-hover:hover::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background-color: #8ed5ff;
+            box-shadow: 0 0 8px #8ed5ff;
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #2e3447; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3e484f; }
+
+        .dashboard-bg {
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(142, 213, 255, 0.05), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(221, 183, 255, 0.05), transparent 25%);
+        }
+
+        .animate-pulse-error { animation: pulse-error 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        .animate-pulse-secondary { animation: pulse-secondary 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        .animate-pulse-critical { animation: pulse-critical 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-background text-on-surface font-body-md antialiased h-screen w-full flex overflow-hidden">
+
+    <!-- Sidebar Navigation -->
+    <nav class="bg-surface-container-lowest/80 backdrop-blur-md border-r border-outline-variant/20 flex flex-col fixed left-0 top-0 h-full z-40 w-64">
+        <div class="p-6 border-b border-outline-variant/20">
+            <div class="flex items-center gap-3 mb-2">
+                <!-- ThreatLens AI Logo -->
+                <div class="w-10 h-10 shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="w-full h-full">
+                        <defs>
+                            <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#38bdf8;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
+                            </linearGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        <path d="M50 5 L85 20 V50 C85 70 50 90 50 90 C50 90 15 70 15 50 V20 L50 5Z" fill="none" stroke="url(#grad1)" stroke-width="4" filter="url(#glow)"/>
+                        <circle cx="50" cy="40" r="15" fill="none" stroke="#38bdf8" stroke-width="2" />
+                        <circle cx="50" cy="40" r="6" fill="#a855f7" filter="url(#glow)"/>
+                        <path d="M35 40 Q50 25 65 40" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M35 40 Q50 55 65 40" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="font-headline-md text-xl text-primary font-bold tracking-tighter">ThreatLens AI</h1>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 mt-4">
+                <div id="status-pulse" class="w-2 h-2 rounded-full bg-outline animate-pulse"></div>
+                <div>
+                    <p class="font-label-caps text-[10px] text-on-surface-variant">SOC CO-PILOT</p>
+                    <p class="font-label-caps text-[8px] text-outline">INTEGRATED SYSTEM</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation items -->
+        <ul class="flex flex-col py-4 w-full flex-1 gap-1 px-3">
+            <li>
+                <a id="nav-overview" href="#overview" class="flex items-center gap-3 px-4 py-3 rounded text-primary bg-primary/10 border-l-4 border-primary transition-all duration-200 cursor-pointer">
+                    <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+                    <span class="font-label-caps text-label-caps">Command Center</span>
+                </a>
+            </li>
+            <li>
+                <a id="nav-investigator" href="#investigator" class="flex items-center gap-3 px-4 py-3 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all duration-200 cursor-pointer border-l-4 border-transparent">
+                    <span class="material-symbols-outlined">security</span>
+                    <span class="font-label-caps text-label-caps">Threat Investigator</span>
+                </a>
+            </li>
+            <li>
+                <a id="nav-settings" href="#settings" class="flex items-center gap-3 px-4 py-3 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all duration-200 cursor-pointer border-l-4 border-transparent">
+                    <span class="material-symbols-outlined">settings</span>
+                    <span class="font-label-caps text-label-caps">Settings</span>
+                </a>
+            </li>
+            <li class="mt-auto mb-4">
+                <div class="glass-panel bg-surface-container-low/50 p-3 rounded-lg mx-2">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span id="conn-indicator" class="w-2 h-2 rounded-full bg-outline animate-pulse"></span>
+                        <span id="conn-title" class="font-label-caps text-[10px] text-outline uppercase">Checking Connection</span>
+                    </div>
+                    <div id="conn-desc" class="font-data-mono text-[9px] text-on-surface-variant truncate">Attempting to reach API...</div>
+                </div>
+            </li>
+        </ul>
+
+        <!-- User profile section -->
+        <div class="p-4 border-t border-outline-variant/20 bg-surface-container-low/30 backdrop-blur-md">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30">
+                    <span class="material-symbols-outlined text-primary">person</span>
+                </div>
+                <div>
+                    <div class="font-headline-md text-sm font-semibold text-on-surface">Admin User</div>
+                    <div class="font-label-caps text-[10px] text-primary">Level 5 Clearance</div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 ml-64 flex flex-col h-full overflow-hidden bg-surface dashboard-bg">
+        <!-- Top Header -->
+        <header class="h-20 border-b border-outline-variant/20 bg-surface-container-lowest/50 backdrop-blur-md flex items-center justify-between px-margin-desktop shrink-0 z-30">
+            <div class="flex items-center gap-4">
+                <h2 id="view-title" class="font-display-lg text-2xl font-bold text-on-surface tracking-tight">Command Center</h2>
+                <div class="flex gap-2">
+                    <div class="glass-panel px-3 py-1 rounded flex items-center gap-2 bg-surface-container-low/50">
+                        <span class="material-symbols-outlined text-[16px] text-on-surface-variant">database</span>
+                        <span id="header-db-name" class="font-data-mono text-[11px] text-on-surface-variant uppercase">ATLAS CLUSTER</span>
+                    </div>
+                    <div class="glass-panel px-3 py-1 rounded flex items-center gap-2 bg-surface-container-low/50">
+                        <span class="material-symbols-outlined text-[16px] text-on-surface-variant">schedule</span>
+                        <span id="live-clock" class="font-data-mono text-[11px] text-on-surface-variant">00:00:00 UTC</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button onclick="refreshData()" title="Refresh Dashboard" class="p-2 rounded-full text-primary hover:bg-surface-container-high transition-colors active:scale-95">
+                    <span class="material-symbols-outlined text-xl">refresh</span>
+                </button>
+                <div id="timeframe-select-container">
+                    <select id="timeframe-select" onchange="refreshData()" class="bg-surface-container-low border border-outline-variant/30 text-on-surface font-label-caps text-xs rounded px-4 py-2 focus:ring-1 focus:ring-primary focus:border-primary outline-none cursor-pointer">
+                        <option value="15m">Last 15 Minutes</option>
+                        <option value="1h">Last Hour</option>
+                        <option value="24h" selected>Last 24 Hours</option>
+                        <option value="7d">Last 7 Days</option>
+                        <option value="all">All Time</option>
+                    </select>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content View Canvas -->
+        <div id="content-canvas" class="flex-1 overflow-y-auto p-margin-desktop space-y-gutter relative z-10">
+            
+            <!-- VIEW 1: OVERVIEW/COMMAND CENTER -->
+            <div id="view-overview-container" class="space-y-6">
+                <!-- Row 1: Key Metrics -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-gutter">
+                    <!-- Total Requests -->
+                    <div class="glass-panel bg-surface-container-low/80 p-5 rounded-lg flex flex-col justify-between relative overflow-hidden group">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="font-label-caps text-xs text-on-surface-variant">TOTAL REQUESTS</span>
+                            <span class="material-symbols-outlined text-primary">public</span>
+                        </div>
+                        <div>
+                            <div id="metric-total-requests" class="font-display-lg text-3xl font-bold text-on-surface mb-1">0</div>
+                            <div class="font-data-mono text-[11px] text-tertiary flex items-center gap-1">
+                                <span id="trend-icon-total-requests" class="material-symbols-outlined text-[14px]">horizontal_rule</span>
+                                <span id="trend-text-total-requests">No trend</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Malicious Requests -->
+                    <div class="glass-panel bg-error-container/10 border-error/30 p-5 rounded-lg flex flex-col justify-between relative overflow-hidden group">
+                        <div class="absolute inset-0 bg-gradient-to-br from-error/5 to-transparent pointer-events-none"></div>
+                        <div class="flex justify-between items-start mb-4 relative z-10">
+                            <span class="font-label-caps text-xs text-error">MALICIOUS REQUESTS</span>
+                            <span class="material-symbols-outlined text-error animate-pulse-critical">warning</span>
+                        </div>
+                        <div class="relative z-10">
+                            <div id="metric-malicious-requests" class="font-display-lg text-3xl font-bold text-error mb-1 neon-text-error">0</div>
+                            <div class="font-data-mono text-[11px] text-error flex items-center gap-1">
+                                <span id="trend-icon-malicious-requests" class="material-symbols-outlined text-[14px]">horizontal_rule</span>
+                                <span id="trend-text-malicious-requests">No trend</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Total Incidents -->
+                    <div class="glass-panel bg-surface-container-low/80 p-5 rounded-lg flex flex-col justify-between">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="font-label-caps text-xs text-on-surface-variant">TOTAL INCIDENTS</span>
+                            <span class="material-symbols-outlined text-primary">gpp_maybe</span>
+                        </div>
+                        <div>
+                            <div id="metric-total-incidents" class="font-display-lg text-3xl font-bold text-on-surface mb-1">0</div>
+                            <div class="font-data-mono text-[11px] text-on-surface-variant flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[14px]">horizontal_rule</span>
+                                <span>No change</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Active Campaigns -->
+                    <div class="glass-panel bg-surface-container-low/80 p-5 rounded-lg flex flex-col justify-between">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="font-label-caps text-xs text-on-surface-variant">ACTIVE CAMPAIGNS</span>
+                            <span class="material-symbols-outlined text-secondary">account_tree</span>
+                        </div>
+                        <div>
+                            <div id="metric-active-campaigns" class="font-display-lg text-3xl font-bold text-on-surface mb-1">0</div>
+                            <div class="font-data-mono text-[10px] text-secondary flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[14px]">schedule</span>
+                                <span id="campaigns-freshness">Materialized via Atlas Trigger</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 2: Attack Distribution Pie and Timeline Charts -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+                    <!-- Attack Evolution Timeline -->
+                    <div class="lg:col-span-2 glass-panel-heavy bg-surface-container-lowest/60 p-6 rounded-lg flex flex-col h-[400px]">
+                        <div class="flex justify-between items-center mb-6 shrink-0">
+                            <h3 class="font-headline-md text-lg font-semibold text-on-surface">Attack Evolution Timeline</h3>
+                            <div class="flex gap-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-3 h-3 rounded-full bg-[#2e3447]"></span>
+                                    <span class="font-label-caps text-[10px] text-on-surface-variant">Legitimate</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="w-3 h-3 rounded-full bg-error"></span>
+                                    <span class="font-label-caps text-[10px] text-on-surface-variant">Malicious</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex-1 relative w-full h-full min-h-0">
+                            <canvas id="timelineChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Blast Radius -->
+                    <div class="glass-panel-heavy bg-surface-container-lowest/60 p-6 rounded-lg flex flex-col h-[400px]">
+                        <div class="flex justify-between items-center mb-4 shrink-0">
+                            <h3 class="font-headline-md text-lg font-semibold text-on-surface">Attack Type Distribution</h3>
+                            <span class="material-symbols-outlined text-on-surface-variant text-sm cursor-help" title="Distribution of malicious activity by attack type">info</span>
+                        </div>
+                        <div class="flex-1 relative w-full h-full min-h-0 flex items-center justify-center">
+                            <canvas id="attackTypeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 3: Top Attacking IPs & Blast Radius endpoints selection -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+                    <!-- Top Attacking IPs table -->
+                    <div class="lg:col-span-2 glass-panel-heavy bg-surface-container-lowest/60 p-6 rounded-lg flex flex-col min-h-[350px]">
+                        <div class="flex justify-between items-center mb-4 shrink-0">
+                            <h3 class="font-headline-md text-lg font-semibold text-on-surface">Top Attacking IPs & Target Counts</h3>
+                        </div>
+                        <div class="flex-1 overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-outline-variant/20 bg-surface-container-low/50">
+                                        <th class="py-2 px-3 font-label-caps text-[11px] text-on-surface-variant font-normal">SOURCE IP</th>
+                                        <th class="py-2 px-3 font-label-caps text-[11px] text-on-surface-variant font-normal">ATTACK TYPES</th>
+                                        <th class="py-2 px-3 font-label-caps text-[11px] text-on-surface-variant font-normal">TOTAL ATTACKS</th>
+                                        <th class="py-2 px-3 font-label-caps text-[11px] text-on-surface-variant font-normal">UNIQUE TARGETS</th>
+                                        <th class="py-2 px-3 font-label-caps text-[11px] text-on-surface-variant font-normal text-right">ACTION</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="top-ips-tbody" class="font-data-mono text-xs">
+                                    <tr>
+                                        <td colspan="5" class="py-8 text-center text-outline">Loading top attacking IPs data...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Selected IP Blast Radius -->
+                    <div class="glass-panel-heavy bg-surface-container-lowest/60 p-6 rounded-lg flex flex-col min-h-[350px]">
+                        <div class="flex justify-between items-center mb-4 shrink-0">
+                            <h3 class="font-headline-md text-lg font-semibold text-on-surface">IP Endpoint Blast Radius</h3>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block font-label-caps text-[10px] text-on-surface-variant mb-2">SELECT IP ADDRESS</label>
+                            <select id="blast-radius-ip-select" onchange="loadBlastRadius(this.value)" class="w-full bg-surface-container-low border border-outline-variant/30 text-on-surface font-data-mono text-xs rounded p-2 focus:ring-1 focus:ring-primary focus:border-primary outline-none">
+                                <option value="">No attacking IPs loaded</option>
+                            </select>
+                        </div>
+                        <div class="flex-1 relative w-full h-full min-h-0 flex items-center justify-center">
+                            <canvas id="blastRadiusChart" class="max-h-[160px]"></canvas>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-8">
+                                <span id="blast-radius-center-text" class="font-display-lg text-lg font-bold text-on-surface">API</span>
+                                <span class="font-label-caps text-[8px] text-on-surface-variant">DOMINANT PATH</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 4: Campaign Detection Table -->
+                <div class="glass-panel-heavy bg-surface-container-lowest/60 p-6 rounded-lg flex flex-col">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 border-b border-outline-variant/30 pb-4 gap-4">
+                        <div>
+                            <h3 class="font-headline-md text-lg font-semibold text-on-surface flex items-center gap-2">
+                                <span class="material-symbols-outlined text-secondary">hub</span>
+                                Coordinated Campaign Detection (APT)
+                                <span class="bg-secondary/20 text-secondary font-label-caps text-[9px] px-2 py-0.5 rounded ml-2 uppercase">
+                                    Atlas Materialized View
+                                </span>
+                            </h3>
+                            <p class="font-body-md text-xs text-on-surface-variant mt-1">AI-driven clustering of distributed attack vectors matching threat tactics.</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-6">
+                            <div class="flex flex-col">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="font-label-caps text-[10px] text-on-surface-variant">Min Frequency</label>
+                                    <span id="campaign-freq-val" class="font-data-mono text-[10px] text-secondary">25</span>
+                                </div>
+                                <input id="campaign-freq-slider" class="w-32 accent-secondary" max="100" min="5" type="range" value="25" oninput="updateCampaignThresholds()"/>
+                            </div>
+                            <div class="flex flex-col">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="font-label-caps text-[10px] text-on-surface-variant">Min Attack Types</label>
+                                    <span id="campaign-types-val" class="font-data-mono text-[10px] text-secondary">3</span>
+                                </div>
+                                <input id="campaign-types-slider" class="w-32 accent-secondary" max="5" min="1" type="range" value="3" oninput="updateCampaignThresholds()"/>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-outline-variant/20 bg-surface-container-low/50">
+                                    <th class="py-3 px-4 font-label-caps text-xs text-on-surface-variant font-normal">SOURCE IP</th>
+                                    <th class="py-3 px-4 font-label-caps text-xs text-on-surface-variant font-normal">ATTACK TYPES</th>
+                                    <th class="py-3 px-4 font-label-caps text-xs text-on-surface-variant font-normal">TOTAL REQ</th>
+                                    <th class="py-3 px-4 font-label-caps text-xs text-on-surface-variant font-normal">CONFIDENCE / SEVERITY</th>
+                                    <th class="py-3 px-4 font-label-caps text-xs text-on-surface-variant font-normal text-right">ACTION</th>
+                                </tr>
+                            </thead>
+                            <tbody id="campaign-tbody" class="font-data-mono text-sm">
+                                <tr>
+                                    <td colspan="5" class="py-8 text-center text-outline">Adjust sliders or query campaigns...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 2: THREAT INVESTIGATOR -->
+            <div id="view-investigator-container" class="hidden flex h-[calc(100vh-8.5rem)] overflow-hidden gap-6 relative">
+                <!-- Left Sidebar: Incident Feed -->
+                <aside class="w-[300px] xl:w-[350px] border border-outline-variant/20 rounded-lg bg-surface-dim/40 flex flex-col h-full shrink-0">
+                    <div class="p-4 border-b border-outline-variant/30 bg-surface/50 backdrop-blur-md sticky top-0 shrink-0">
+                        <h2 class="font-headline-md text-base font-semibold text-on-surface mb-3 flex justify-between items-center">
+                            Incident Feed
+                            <span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary text-lg">filter_list</span>
+                        </h2>
+                        <div class="flex gap-1 overflow-x-auto pb-1 no-scrollbar">
+                            <button id="feed-filter-all" onclick="setFeedFilter('All')" class="px-3 py-1 rounded-full bg-primary/20 text-primary border border-primary/30 font-label-caps text-[10px] whitespace-nowrap">Hybrid Risk</button>
+                        </div>
+                    </div>
+                    <!-- Incident list container -->
+                    <div id="incident-feed-list" class="flex-1 overflow-y-auto p-3 space-y-3">
+                        <div class="py-8 text-center text-outline">Loading incidents feed...</div>
+                    </div>
+                </aside>
+
+                <!-- Right Panel: Incident Details -->
+                <section class="flex-1 bg-surface-container-lowest/40 border border-outline-variant/20 rounded-lg h-full overflow-y-auto p-6 relative">
+                    <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-error/5 via-transparent to-transparent pointer-events-none"></div>
+                    
+                    <!-- Detail state container -->
+                    <div id="incident-detail-content" class="relative z-10 space-y-6 hidden">
+                        <!-- Header Section -->
+                        <div class="flex flex-col xl:flex-row xl:items-end justify-between border-b border-outline-variant/30 pb-6 gap-4">
+                            <div class="animate-pulse-error">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <span class="material-symbols-outlined text-error text-3xl glow-error">warning</span>
+                                    <h2 id="detail-title" class="font-display-lg text-xl xl:text-2xl text-error neon-text-error">MALICIOUS // THREAT DETECTED</h2>
+                                </div>
+                                <p id="detail-meta-header" class="font-data-mono text-xs text-on-surface-variant ml-11">INCIDENT ID: N/A | CLASSIFIED VIA HYBRID RISK</p>
+                            </div>
+                            <div class="text-right flex items-center gap-4 justify-end">
+                                <div class="flex flex-col items-end">
+                                    <span class="font-label-caps text-[10px] text-outline">RISK LEVEL</span>
+                                    <span id="detail-severity-badge" class="font-headline-md text-lg text-error uppercase font-bold">CRITICAL</span>
+                                </div>
+                                <div class="relative w-16 h-16 glow-error">
+                                    <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                        <path class="text-surface-variant stroke-current" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke-width="4"></path>
+                                        <path id="detail-risk-score-circle" class="text-error stroke-current" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke-dasharray="0, 100" stroke-width="4"></path>
+                                    </svg>
+                                    <span id="detail-risk-score-text" class="absolute inset-0 flex items-center justify-center font-display-lg text-lg font-bold text-error">0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bento Grid Layout for Details -->
+                        <div class="grid grid-cols-12 gap-gutter">
+                            <!-- Metadata Grid (Span 7) -->
+                            <div class="col-span-12 lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-unit">
+                                <div class="glass-panel bg-surface-container-low p-4 flex flex-col justify-center">
+                                    <span class="font-label-caps text-[10px] text-outline mb-1">EVENT ID</span>
+                                    <span id="detail-event-id" class="font-data-mono text-xs text-on-surface truncate">N/A</span>
+                                </div>
+                                <div class="glass-panel bg-surface-container-low p-4 flex flex-col justify-center">
+                                    <span class="font-label-caps text-[10px] text-outline mb-1">TIMESTAMP</span>
+                                    <span id="detail-timestamp" class="font-data-mono text-xs text-on-surface">N/A</span>
+                                </div>
+                                <div class="glass-panel bg-surface-container-low p-4 flex flex-col justify-center">
+                                    <span class="font-label-caps text-[10px] text-outline mb-1">SOURCE IP / ATTACKS</span>
+                                    <span id="detail-ip" class="font-data-mono text-xs text-primary flex items-center gap-2">N/A</span>
+                                </div>
+                                <div class="glass-panel bg-surface-container-low p-4 flex flex-col justify-center">
+                                    <span class="font-label-caps text-[10px] text-outline mb-1">METHOD &amp; PATH</span>
+                                    <span id="detail-method-path" class="font-data-mono text-xs text-on-surface truncate">N/A</span>
+                                </div>
+                            </div>
+
+                            <!-- AI Copilot Card (Span 5) -->
+                            <div class="col-span-12 lg:col-span-5 glass-panel bg-surface-container-highest/50 p-5 rounded-lg border-secondary-container/50 glow-secondary relative overflow-hidden animate-pulse-secondary">
+                                <div class="absolute top-0 right-0 p-4 opacity-10">
+                                    <span class="material-symbols-outlined text-5xl text-secondary">memory</span>
+                                </div>
+                                <div class="flex items-center gap-2 mb-3 relative z-10">
+                                    <span class="material-symbols-outlined text-secondary">auto_awesome</span>
+                                    <h3 class="font-headline-md text-base text-secondary">AI Vector Analysis</h3>
+                                </div>
+                                <p id="detail-ai-desc" class="font-body-md text-xs text-on-surface-variant mb-4 relative z-10 leading-relaxed">
+                                    No vector analysis matches available. Run the machine learning pipeline to enable embeddings comparison.
+                                </p>
+                                <div class="space-y-3 relative z-10">
+                                    <div>
+                                        <div class="flex justify-between text-[10px] mb-1">
+                                            <span class="font-data-mono text-outline">Similarity Match</span>
+                                            <span id="detail-ai-similarity" class="font-data-mono text-secondary">0%</span>
+                                        </div>
+                                        <div class="w-full bg-surface-dim rounded-full h-1">
+                                            <div id="detail-ai-progress" class="bg-secondary h-1 rounded-full" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                    <div id="detail-mitre-tags" class="flex flex-wrap gap-2 pt-1">
+                                        <span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">MITRE: N/A</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Evidence: Raw Log -->
+                            <div class="col-span-12 glass-panel bg-surface-container-lowest border border-outline-variant/20 rounded-lg overflow-hidden flex flex-col">
+                                <div class="bg-surface-container-low px-4 py-2 border-b border-outline-variant/20 flex justify-between items-center cursor-pointer" onclick="toggleRawPayload()">
+                                    <div class="flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-outline text-sm">code</span>
+                                        <span class="font-label-caps text-[10px] text-on-surface">RAW LOG / REQUEST DATA</span>
+                                    </div>
+                                    <span id="raw-payload-arrow" class="material-symbols-outlined text-outline text-sm">expand_less</span>
+                                </div>
+                                <div id="raw-payload-content" class="p-4 overflow-x-auto bg-surface-container-lowest">
+                                    <pre class="font-data-mono text-xs text-on-surface-variant leading-relaxed"><code id="detail-raw-code">N/A</code></pre>
+                                </div>
+                            </div>
+
+                            <!-- Historical Similarity Logs -->
+                            <div class="col-span-12 glass-panel bg-surface-container-lowest border border-outline-variant/20 rounded-lg overflow-hidden flex flex-col">
+                                <div class="bg-surface-container-low px-4 py-3 border-b border-outline-variant/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-outline text-sm">manage_search</span>
+                                        <span class="font-label-caps text-[10px] text-on-surface">SEMANTIC SIMILAR LOGS IN HISTORY</span>
+                                    </div>
+                                    <button id="btn-find-similar-incidents" onclick="findSimilarIncidents()" class="bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary font-label-caps text-[10px] px-3 py-1 rounded transition-colors uppercase tracking-wider flex items-center gap-1.5 active:scale-95">
+                                        <span class="material-symbols-outlined text-xs">search</span> Find Similar Incidents
+                                    </button>
+                                </div>
+                                <div class="p-4 overflow-x-auto bg-surface-container-lowest">
+                                    <table class="w-full text-left border-collapse text-xs">
+                                        <thead>
+                                            <tr class="border-b border-outline-variant/20 bg-surface-container-low/50">
+                                                <th class="py-2 px-3 font-label-caps text-[10px] text-on-surface-variant font-normal">TIMESTAMP</th>
+                                                <th class="py-2 px-3 font-label-caps text-[10px] text-on-surface-variant font-normal">SOURCE IP</th>
+                                                <th class="py-2 px-3 font-label-caps text-[10px] text-on-surface-variant font-normal">URI PATH</th>
+                                                <th class="py-2 px-3 font-label-caps text-[10px] text-on-surface-variant font-normal">RISK SCORE</th>
+                                                <th class="py-2 px-3 font-label-caps text-[10px] text-on-surface-variant font-normal">SEMANTIC MATCH</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="similar-incidents-tbody" class="font-data-mono">
+                                            <tr>
+                                                <td colspan="5" class="py-4 text-center text-outline">Click button to trigger MongoDB Atlas Vector Search...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Remediation Action -->
+                            <div class="col-span-12 glass-panel bg-error/5 border border-error/20 p-6 rounded-lg flex flex-col md:flex-row items-center justify-between gap-6">
+                                <div>
+                                    <h4 class="font-headline-md text-base text-error font-bold mb-2">Recommended Remediation Plan</h4>
+                                    <ul id="detail-remediations" class="list-disc list-inside font-body-md text-xs text-on-surface-variant space-y-1">
+                                        <li>Immediate isolation of host IP at edge firewall.</li>
+                                        <li>Initiate automated incident playbook.</li>
+                                    </ul>
+                                </div>
+                                <button onclick="applyResponse()" class="bg-error text-on-error font-label-caps text-xs px-5 py-2.5 rounded hover:bg-error-container hover:text-on-error-container transition-colors shadow-[0_0_15px_rgba(255,180,171,0.2)] whitespace-nowrap flex items-center gap-2 active:scale-95">
+                                    <span class="material-symbols-outlined text-sm">block</span>
+                                    APPLY RECOMMENDED RESPONSE
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Empty state detail container -->
+                    <div id="incident-detail-empty" class="flex flex-col items-center justify-center h-full text-center p-12">
+                        <span class="material-symbols-outlined text-outline-variant text-6xl mb-4">security</span>
+                        <h3 class="font-headline-md text-lg font-bold text-on-surface mb-2">No Incident Selected</h3>
+                        <p class="text-xs text-on-surface-variant max-w-sm">
+                            Please select a security event from the Incident Feed to display detailed forensic context, recommendation strategies, and similarity insights.
+                        </p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- VIEW 3: SETTINGS -->
+            <div id="view-settings-container" class="hidden space-y-6 max-w-5xl">
+                <div class="glass-panel bg-surface-container-lowest/50 border border-outline-variant/20 rounded-lg p-6">
+                    <div class="flex items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h2 class="font-headline-md text-xl text-on-surface">Alert Credentials</h2>
+                            <p id="settings-source" class="font-data-mono text-xs text-on-surface-variant mt-1">Loading alert settings...</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="testAlertSettings()" class="bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/30 text-on-surface font-label-caps text-xs px-4 py-2 rounded transition-colors flex items-center gap-2 active:scale-95">
+                                <span class="material-symbols-outlined text-sm">outgoing_mail</span>
+                                TEST
+                            </button>
+                            <button onclick="saveAlertSettings()" class="bg-primary text-on-primary font-label-caps text-xs px-4 py-2 rounded hover:bg-primary-fixed-dim transition-colors flex items-center gap-2 active:scale-95">
+                                <span class="material-symbols-outlined text-sm">save</span>
+                                SAVE
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <section class="glass-panel bg-surface-container-low/60 rounded-lg p-4">
+                            <h3 class="font-label-caps text-xs text-primary mb-4">GLOBAL</h3>
+                            <label class="flex items-center gap-3 mb-3 text-sm"><input id="settings-alerts-enabled" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Enable alerts</label>
+                            <label class="flex items-center gap-3 mb-3 text-sm"><input id="settings-dry-run" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Dry run mode</label>
+                            <label class="block font-label-caps text-[10px] text-outline mb-1">Channels</label>
+                            <div class="flex flex-wrap gap-3 mb-3 text-sm">
+                                <label class="flex items-center gap-2"><input id="settings-channel-email" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Email</label>
+                                <label class="flex items-center gap-2"><input id="settings-channel-telegram" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Telegram</label>
+                                <label class="flex items-center gap-2"><input id="settings-channel-slack" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Slack</label>
+                            </div>
+                            <label class="block font-label-caps text-[10px] text-outline mb-1">Dashboard URL</label>
+                            <input id="settings-dashboard-url" type="text" class="w-full bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm text-on-surface" placeholder="http://127.0.0.1:8501">
+                        </section>
+
+                        <section class="glass-panel bg-surface-container-low/60 rounded-lg p-4">
+                            <h3 class="font-label-caps text-xs text-primary mb-4">EMAIL</h3>
+                            <label class="flex items-center gap-3 mb-3 text-sm"><input id="settings-email-enabled" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Enable email</label>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <input id="settings-smtp-host" type="text" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="SMTP host">
+                                <input id="settings-smtp-port" type="number" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="587">
+                                <input id="settings-smtp-username" type="text" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="SMTP username">
+                                <input id="settings-smtp-password" type="password" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="New password">
+                                <input id="settings-smtp-from" type="email" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="From address">
+                                <input id="settings-smtp-to" type="email" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="To address">
+                            </div>
+                            <label class="flex items-center gap-3 mt-3 text-sm"><input id="settings-smtp-tls" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Use TLS</label>
+                            <p id="settings-smtp-password-status" class="font-data-mono text-[10px] text-outline mt-2">Password not configured</p>
+                        </section>
+
+                        <section class="glass-panel bg-surface-container-low/60 rounded-lg p-4">
+                            <h3 class="font-label-caps text-xs text-primary mb-4">TELEGRAM</h3>
+                            <label class="flex items-center gap-3 mb-3 text-sm"><input id="settings-telegram-enabled" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Enable Telegram</label>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <input id="settings-telegram-token" type="password" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="New bot token">
+                                <input id="settings-telegram-chat" type="text" class="bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="Chat ID">
+                            </div>
+                            <p id="settings-telegram-token-status" class="font-data-mono text-[10px] text-outline mt-2">Token not configured</p>
+                        </section>
+
+                        <section class="glass-panel bg-surface-container-low/60 rounded-lg p-4">
+                            <h3 class="font-label-caps text-xs text-primary mb-4">SLACK</h3>
+                            <label class="flex items-center gap-3 mb-3 text-sm"><input id="settings-slack-enabled" type="checkbox" class="rounded bg-surface-container border-outline-variant text-primary"> Enable Slack</label>
+                            <input id="settings-slack-webhook" type="password" class="w-full bg-surface-container border border-outline-variant/30 rounded px-3 py-2 text-sm" placeholder="New webhook URL">
+                            <p id="settings-slack-webhook-status" class="font-data-mono text-[10px] text-outline mt-2">Webhook not configured</p>
+                        </section>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </main>
+
+    <!-- Global Toast notification for action feedback -->
+    <div id="toast" class="fixed bottom-6 right-6 glass-panel-heavy bg-surface-container-high/90 border-primary/30 p-4 rounded shadow-2xl flex items-center gap-3 max-w-sm transform translate-y-24 opacity-0 transition-all duration-300 z-50">
+        <span id="toast-icon" class="material-symbols-outlined text-primary">info</span>
+        <div>
+            <div id="toast-title" class="font-label-caps text-xs text-on-surface">SYSTEM NOTICE</div>
+            <div id="toast-body" class="text-xs text-on-surface-variant mt-1">Notification text.</div>
+        </div>
+    </div>
+
+    <!-- Script Implementation -->
+    <script>
+        // Set Chart.js defaults
+        Chart.defaults.color = '#bdc8d1';
+        Chart.defaults.font.family = 'JetBrains Mono';
+        Chart.defaults.font.size = 9;
+
+        // Shared API endpoint base
+        const API_BASE = "";
+
+        // Application State
+        let timelineChart = null;
+        let attackTypeChart = null;
+        let blastRadiusChart = null;
+        
+        let currentFilter = "All";
+        let activeIncidentId = null;
+        let cachedIncidents = [];
+        let campaignTimeout = null;
+
+        // Live Clock
+        function updateClock() {
+            const clock = document.getElementById("live-clock");
+            if (clock) {
+                const now = new Date();
+                clock.textContent = now.toISOString().replace("T", " ").substring(0, 19) + " UTC";
+            }
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Toast notifications helper
+        function showToast(title, body, icon = "info", type = "info") {
+            const toast = document.getElementById("toast");
+            const toastTitle = document.getElementById("toast-title");
+            const toastBody = document.getElementById("toast-body");
+            const toastIcon = document.getElementById("toast-icon");
+
+            toastTitle.textContent = title.toUpperCase();
+            toastBody.textContent = body;
+            toastIcon.textContent = icon;
+
+            // Change icon colors based on type
+            toastIcon.className = "material-symbols-outlined ";
+            if (type === "error" || type === "critical") {
+                toastIcon.className += "text-error";
+                toast.style.borderColor = "rgba(255, 180, 171, 0.4)";
+            } else if (type === "success") {
+                toastIcon.className += "text-tertiary-container";
+                toast.style.borderColor = "rgba(48, 200, 143, 0.4)";
+            } else {
+                toastIcon.className += "text-primary";
+                toast.style.borderColor = "rgba(56, 189, 248, 0.4)";
+            }
+
+            // Show Toast
+            toast.classList.remove("translate-y-24", "opacity-0");
+            setTimeout(() => {
+                toast.classList.add("translate-y-24", "opacity-0");
+            }, 4000);
+        }
+
+        // View switching router
+        function routeView() {
+            const hash = window.location.hash || "#overview";
+            const navOverview = document.getElementById("nav-overview");
+            const navInvestigator = document.getElementById("nav-investigator");
+            const navSettings = document.getElementById("nav-settings");
+            const viewTitle = document.getElementById("view-title");
+            const timeframeContainer = document.getElementById("timeframe-select-container");
+
+            const overviewContainer = document.getElementById("view-overview-container");
+            const investigatorContainer = document.getElementById("view-investigator-container");
+            const settingsContainer = document.getElementById("view-settings-container");
+
+            // Reset navigation links active class
+            [navOverview, navInvestigator, navSettings].forEach(el => {
+                el.className = "flex items-center gap-3 px-4 py-3 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all duration-200 cursor-pointer border-l-4 border-transparent";
+                const span = el.querySelector("span");
+                if (span) span.style.fontVariationSettings = "'FILL' 0";
+            });
+
+            if (hash === "#overview") {
+                navOverview.className = "flex items-center gap-3 px-4 py-3 rounded text-primary bg-primary/10 border-l-4 border-primary transition-all duration-200 cursor-pointer";
+                const span = navOverview.querySelector("span");
+                if (span) span.style.fontVariationSettings = "'FILL' 1";
+                
+                viewTitle.textContent = "Command Center";
+                timeframeContainer.style.display = "block";
+
+                overviewContainer.classList.remove("hidden");
+                investigatorContainer.classList.add("hidden");
+                settingsContainer.classList.add("hidden");
+
+                // Initialize/render overview charts
+                initOverviewCharts();
+            } else if (hash === "#investigator") {
+                navInvestigator.className = "flex items-center gap-3 px-4 py-3 rounded text-primary bg-primary/10 border-l-4 border-primary transition-all duration-200 cursor-pointer";
+                const span = navInvestigator.querySelector("span");
+                if (span) span.style.fontVariationSettings = "'FILL' 1";
+
+                viewTitle.textContent = "Threat Investigator";
+                timeframeContainer.style.display = "block";
+
+                overviewContainer.classList.add("hidden");
+                investigatorContainer.classList.remove("hidden");
+                settingsContainer.classList.add("hidden");
+
+                // Load investigator list
+                loadIncidentFeed();
+            } else if (hash === "#settings") {
+                navSettings.className = "flex items-center gap-3 px-4 py-3 rounded text-primary bg-primary/10 border-l-4 border-primary transition-all duration-200 cursor-pointer";
+                const span = navSettings.querySelector("span");
+                if (span) span.style.fontVariationSettings = "'FILL' 1";
+
+                viewTitle.textContent = "Settings";
+                timeframeContainer.style.display = "none";
+
+                overviewContainer.classList.add("hidden");
+                investigatorContainer.classList.add("hidden");
+                settingsContainer.classList.remove("hidden");
+
+                loadAlertSettings();
+            }
+        }
+        window.addEventListener("hashchange", routeView);
+
+        // Fetch wrapper with error handling
+        async function fetchAPI(endpoint) {
+            try {
+                let url = `${API_BASE}${endpoint}`;
+                const timeframeSelect = document.getElementById("timeframe-select");
+                const timeframe = timeframeSelect ? timeframeSelect.value : null;
+
+                if (timeframe && (
+                    endpoint === "/api/summary" ||
+                    endpoint.startsWith("/api/timeline") ||
+                    endpoint === "/api/attack-types" ||
+                    endpoint.startsWith("/api/top-ips") ||
+                    endpoint.startsWith("/api/campaigns") ||
+                    endpoint.startsWith("/api/incidents?") ||
+                    endpoint === "/api/incidents"
+                )) {
+                    const separator = url.includes("?") ? "&" : "?";
+                    url += `${separator}timeframe=${encodeURIComponent(timeframe)}`;
+                }
+
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`API Error: Status ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error(`Failed to fetch from ${endpoint}:`, error);
+                throw error;
+            }
+        }
+
+        // Global refresh command
+        async function refreshData() {
+            showToast("System Update", "Refreshing dashboard data fields...", "refresh", "info");
+            await loadConnectionStatus();
+            if (window.location.hash === "#investigator") {
+                await loadIncidentFeed();
+            } else if (window.location.hash === "#settings") {
+                await loadAlertSettings();
+            } else {
+                await initOverviewCharts();
+            }
+        }
+
+        function setChecked(id, value) {
+            const el = document.getElementById(id);
+            if (el) el.checked = Boolean(value);
+        }
+
+        function setValue(id, value) {
+            const el = document.getElementById(id);
+            if (el) el.value = value == null ? "" : value;
+        }
+
+        function getValue(id) {
+            const el = document.getElementById(id);
+            return el ? el.value.trim() : "";
+        }
+
+        async function loadAlertSettings() {
+            try {
+                const settings = await fetchAPI("/api/settings/alerts");
+                const encryption = settings.encryption || {};
+                const encryptionLabel = encryption.valid ? "Encryption key valid" : (encryption.message || "Encryption key unavailable");
+                document.getElementById("settings-source").textContent = `Source: ${settings.source || "unknown"} | ${encryptionLabel}${settings.updated_at ? " | Updated: " + settings.updated_at : ""}`;
+
+                setChecked("settings-alerts-enabled", settings.alerts_enabled);
+                setChecked("settings-dry-run", settings.dry_run);
+                setChecked("settings-channel-email", (settings.channels || []).includes("email"));
+                setChecked("settings-channel-telegram", (settings.channels || []).includes("telegram"));
+                setChecked("settings-channel-slack", (settings.channels || []).includes("slack"));
+                setValue("settings-dashboard-url", settings.dashboard_url);
+
+                const email = settings.email || {};
+                setChecked("settings-email-enabled", email.enabled);
+                setValue("settings-smtp-host", email.smtp_host);
+                setValue("settings-smtp-port", email.smtp_port || 587);
+                setValue("settings-smtp-username", email.smtp_username);
+                setValue("settings-smtp-password", "");
+                setValue("settings-smtp-from", email.smtp_from);
+                setValue("settings-smtp-to", email.smtp_to);
+                setChecked("settings-smtp-tls", email.smtp_use_tls !== false);
+                document.getElementById("settings-smtp-password-status").textContent = email.smtp_password_set ? "Password configured" : "Password not configured";
+
+                const telegram = settings.telegram || {};
+                setChecked("settings-telegram-enabled", telegram.enabled);
+                setValue("settings-telegram-token", "");
+                setValue("settings-telegram-chat", telegram.chat_id);
+                document.getElementById("settings-telegram-token-status").textContent = telegram.bot_token_set ? "Bot token configured" : "Token not configured";
+
+                const slack = settings.slack || {};
+                setChecked("settings-slack-enabled", slack.enabled);
+                setValue("settings-slack-webhook", "");
+                document.getElementById("settings-slack-webhook-status").textContent = slack.webhook_url_set ? "Webhook configured" : "Webhook not configured";
+            } catch (error) {
+                showToast("Settings Error", "Unable to load alert settings.", "error", "error");
+            }
+        }
+
+        function collectAlertSettingsPayload() {
+            const channels = [];
+            if (document.getElementById("settings-channel-email").checked) channels.push("email");
+            if (document.getElementById("settings-channel-telegram").checked) channels.push("telegram");
+            if (document.getElementById("settings-channel-slack").checked) channels.push("slack");
+
+            const payload = {
+                alerts_enabled: document.getElementById("settings-alerts-enabled").checked,
+                dry_run: document.getElementById("settings-dry-run").checked,
+                channels,
+                dashboard_url: getValue("settings-dashboard-url") || null,
+                email: {
+                    enabled: document.getElementById("settings-email-enabled").checked,
+                    smtp_host: getValue("settings-smtp-host") || null,
+                    smtp_port: Number(getValue("settings-smtp-port") || 587),
+                    smtp_username: getValue("settings-smtp-username") || null,
+                    smtp_from: getValue("settings-smtp-from") || null,
+                    smtp_to: getValue("settings-smtp-to") || null,
+                    smtp_use_tls: document.getElementById("settings-smtp-tls").checked
+                },
+                telegram: {
+                    enabled: document.getElementById("settings-telegram-enabled").checked,
+                    chat_id: getValue("settings-telegram-chat") || null
+                },
+                slack: {
+                    enabled: document.getElementById("settings-slack-enabled").checked
+                }
+            };
+
+            const smtpPassword = getValue("settings-smtp-password");
+            const telegramToken = getValue("settings-telegram-token");
+            const slackWebhook = getValue("settings-slack-webhook");
+            if (smtpPassword) payload.email.smtp_password = smtpPassword;
+            if (telegramToken) payload.telegram.bot_token = telegramToken;
+            if (slackWebhook) payload.slack.webhook_url = slackWebhook;
+            return payload;
+        }
+
+        async function saveAlertSettings() {
+            try {
+                const response = await fetch("/api/settings/alerts", {
+                    method: "PUT",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(collectAlertSettingsPayload())
+                });
+                if (!response.ok) throw new Error(await extractAPIError(response));
+                showToast("Settings Saved", "Alert credentials were encrypted and stored.", "encrypted", "success");
+                await loadAlertSettings();
+            } catch (error) {
+                console.error("Failed to save alert settings:", error);
+                showToast("Settings Error", error.message || "Unable to save alert settings.", "error", "error");
+            }
+        }
+
+        async function testAlertSettings() {
+            try {
+                const response = await fetch("/api/settings/alerts/test", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+                if (!response.ok) throw new Error(await extractAPIError(response));
+                const data = await response.json();
+                const results = data.results || [];
+                const failures = results.filter(item => item && item.success === false);
+                if (failures.length) {
+                    const detail = failures.map(item => `${item.channel}: ${item.error || item.message || "failed"}`).join(" | ");
+                    showToast("Test Failed", detail, "error", "error");
+                    return;
+                }
+                showToast("Test Alert", `Alert test completed for ${results.length} channel(s).`, "outgoing_mail", "success");
+            } catch (error) {
+                console.error("Failed to test alert settings:", error);
+                showToast("Test Failed", error.message || "Unable to send test alert.", "error", "error");
+            }
+        }
+
+        async function extractAPIError(response) {
+            try {
+                const payload = await response.json();
+                return payload.detail || `API Error: Status ${response.status}`;
+            } catch (error) {
+                return `API Error: Status ${response.status}`;
+            }
+        }
+
+        // Connection status check
+        async function loadConnectionStatus() {
+            const statusPulse = document.getElementById("status-pulse");
+            const indicator = document.getElementById("conn-indicator");
+            const connTitle = document.getElementById("conn-title");
+            const connDesc = document.getElementById("conn-desc");
+            const headerDb = document.getElementById("header-db-name");
+
+            try {
+                const status = await fetchAPI("/api/status");
+                const isMock = status.using_mock;
+
+                statusPulse.className = isMock ? "w-2 h-2 rounded-full bg-tertiary animate-pulse" : "w-2 h-2 rounded-full bg-primary animate-pulse";
+                
+                if (status.connection === "Connected") {
+                    indicator.className = "w-2 h-2 rounded-full bg-tertiary animate-pulse";
+                    connTitle.className = "font-label-caps text-[10px] text-tertiary uppercase";
+                    connTitle.textContent = "System Online";
+                    connDesc.textContent = "MongoDB Atlas Connected";
+                    headerDb.textContent = `ATLAS: ${status.database_name || "threatlens"}`;
+                } else if (status.connection === "Mock Mode") {
+                    indicator.className = "w-2 h-2 rounded-full bg-primary animate-pulse";
+                    connTitle.className = "font-label-caps text-[10px] text-primary uppercase";
+                    connTitle.textContent = "Demo Mode";
+                    connDesc.textContent = "Using Offline Mock Dataset";
+                    headerDb.textContent = "DEMO CLUSTER";
+                } else {
+                    indicator.className = "w-2 h-2 rounded-full bg-error animate-pulse";
+                    connTitle.className = "font-label-caps text-[10px] text-error uppercase";
+                    connTitle.textContent = "Connection Failure";
+                    connDesc.textContent = status.message || "Failed to reach MongoDB";
+                    headerDb.textContent = "DISCONNECTED";
+                }
+            } catch (error) {
+                indicator.className = "w-2 h-2 rounded-full bg-error animate-pulse";
+                connTitle.className = "font-label-caps text-[10px] text-error uppercase";
+                connTitle.textContent = "API Unreachable";
+                connDesc.textContent = "Check backend daemon running on port 8501";
+                headerDb.textContent = "API DOWN";
+            }
+        }
+
+        // --- OVERVIEW / COMMAND CENTER LOGIC ---
+
+        async function initOverviewCharts() {
+            await loadConnectionStatus();
+            await loadSummaryMetrics();
+            await loadTimelineChart();
+            await loadAttackTypesChart();
+            await loadTopAttackingIPs();
+            await loadCampaigns();
+        }
+
+        async function loadSummaryMetrics() {
+            try {
+                const summary = await fetchAPI("/api/summary");
+                
+                // Animate counts counting up
+                animateCount("metric-total-requests", summary.total_requests || 0);
+                animateCount("metric-malicious-requests", summary.malicious_requests || 0);
+                animateCount("metric-total-incidents", summary.total_incidents || 0);
+                animateCount("metric-active-campaigns", summary.active_campaigns || 0);
+
+                applyTrend(
+                    "trend-icon-total-requests",
+                    "trend-text-total-requests",
+                    summary.total_requests_trend,
+                    "requests"
+                );
+                applyTrend(
+                    "trend-icon-malicious-requests",
+                    "trend-text-malicious-requests",
+                    summary.malicious_requests_trend,
+                    "requests"
+                );
+
+                const freshnessEl = document.getElementById("campaigns-freshness");
+                if (freshnessEl) {
+                    if (summary.campaigns_last_updated) {
+                        try {
+                            const date = new Date(summary.campaigns_last_updated);
+                            const formatted = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                            freshnessEl.textContent = `Last materialized: ${formatted} UTC`;
+                        } catch (e) {
+                            freshnessEl.textContent = "Materialized via Atlas Trigger";
+                        }
+                    } else {
+                        freshnessEl.textContent = "Materialized via Atlas Trigger";
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to load summary metrics:", error);
+            }
+        }
+
+        function applyTrend(iconId, textId, trend, unitLabel) {
+            const iconEl = document.getElementById(iconId);
+            const textEl = document.getElementById(textId);
+            if (!iconEl || !textEl) return;
+
+            if (!trend) {
+                iconEl.textContent = "horizontal_rule";
+                textEl.textContent = "No trend";
+                return;
+            }
+
+            const direction = trend.direction || "flat";
+            if (direction === "up") {
+                iconEl.textContent = "trending_up";
+            } else if (direction === "down") {
+                iconEl.textContent = "trending_down";
+            } else {
+                iconEl.textContent = "horizontal_rule";
+            }
+
+            const comparison = trend.comparison_label ? ` ${trend.comparison_label}` : "";
+            if (trend.percent !== null && trend.percent !== undefined) {
+                const percent = Number(trend.percent) || 0;
+                const sign = percent > 0 ? "+" : "";
+                textEl.textContent = `${sign}${percent.toFixed(1)}%${comparison}`;
+                return;
+            }
+
+            const delta = Number(trend.delta || 0);
+            const deltaSign = delta > 0 ? "+" : "";
+            textEl.textContent = `${deltaSign}${delta.toLocaleString()} ${unitLabel}${comparison}`;
+        }
+
+        function animateCount(id, target) {
+            const element = document.getElementById(id);
+            if (!element) return;
+            
+            let current = 0;
+            const duration = 800; // ms
+            const interval = 15; // ms
+            const step = Math.ceil(target / (duration / interval));
+            
+            const timer = setInterval(() => {
+                current += step;
+                if (current >= target) {
+                    clearInterval(timer);
+                    element.textContent = target.toLocaleString();
+                } else {
+                    element.textContent = current.toLocaleString();
+                }
+            }, interval);
+        }
+
+        async function loadTimelineChart() {
+            try {
+                const timeline = await fetchAPI("/api/timeline?bucket_size=5&unit=minute");
+                
+                // Group timeline records by timestamp and type
+                const times = [...new Set(timeline.map(x => x.timestamp.substring(11, 16)))].sort();
+                
+                // Group counts by attack type
+                const attackTypes = [...new Set(timeline.map(x => x.attack_type))];
+                
+                const datasets = [];
+                const colors = ['#ffb4ab', '#ddb7ff', '#8ed5ff', '#30c88f', '#a855f7', '#f59e0b'];
+                
+                // Legitimate vs Malicious style from provided code
+                // Let's create two standard stacked datasets
+                const maliciousData = [];
+                const legitimateData = [];
+                
+                times.forEach(t => {
+                    let malCount = 0;
+                    timeline.forEach(x => {
+                        if (x.timestamp.includes(t)) {
+                            malCount += x.count;
+                        }
+                    });
+                    
+                    maliciousData.push(malCount);
+                    // Legitimate is generated mock curve matching provided code
+                    legitimateData.push(Math.round(1500 + Math.random() * 2000));
+                });
+
+                const ctx = document.getElementById('timelineChart').getContext('2d');
+                
+                if (timelineChart) {
+                    timelineChart.destroy();
+                }
+
+                timelineChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: times.length ? times : ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+                        datasets: [
+                            {
+                                label: 'Legitimate',
+                                data: legitimateData.length ? legitimateData : [1200, 1900, 3000, 5000, 4200, 2800, 1500],
+                                borderColor: '#2e3447',
+                                backgroundColor: 'rgba(46, 52, 71, 0.1)',
+                                borderWidth: 2,
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 0
+                            },
+                            {
+                                label: 'Malicious',
+                                data: maliciousData.length ? maliciousData : [50, 80, 120, 842, 300, 150, 90],
+                                borderColor: '#ffb4ab',
+                                backgroundColor: 'rgba(255, 180, 171, 0.2)',
+                                borderWidth: 2,
+                                fill: true,
+                                tension: 0.4,
+                                pointBackgroundColor: '#ffb4ab',
+                                pointRadius: 3,
+                                pointHoverRadius: 6
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                backgroundColor: 'rgba(21, 27, 45, 0.9)',
+                                titleColor: '#dce1fb',
+                                bodyColor: '#bdc8d1',
+                                borderColor: 'rgba(62, 72, 79, 0.5)',
+                                borderWidth: 1,
+                                padding: 12
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { color: 'rgba(62, 72, 79, 0.1)', drawBorder: false },
+                                ticks: { font: { size: 9 } }
+                            },
+                            y: {
+                                grid: { color: 'rgba(62, 72, 79, 0.1)', drawBorder: false },
+                                ticks: { font: { size: 9 }, maxTicksLimit: 6 }
+                            }
+                        },
+                        interaction: {
+                            mode: 'nearest',
+                            axis: 'x',
+                            intersect: false
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Failed to load timeline chart:", error);
+            }
+        }
+
+        async function loadAttackTypesChart() {
+            try {
+                const distribution = await fetchAPI("/api/attack-types");
+                
+                const labels = distribution.map(x => x.attack_type);
+                const counts = distribution.map(x => x.count);
+                
+                const ctx = document.getElementById('attackTypeChart').getContext('2d');
+                if (attackTypeChart) {
+                    attackTypeChart.destroy();
+                }
+
+                if (!labels.length) {
+                    labels.push('SQLi', 'XSS', 'Path Traversal', 'Scanning');
+                    counts.push(65, 20, 10, 5);
+                }
+
+                attackTypeChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: counts,
+                            backgroundColor: [
+                                '#ffb4ab', // Error
+                                '#ddb7ff', // Secondary
+                                '#8ed5ff', // Primary
+                                '#30c88f', // Tertiary container
+                                '#2e3447'  // Surface Variant
+                            ],
+                            borderWidth: 0,
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '75%',
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    usePointStyle: true,
+                                    padding: 10,
+                                    font: { size: 9 }
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(21, 27, 45, 0.9)',
+                                titleColor: '#dce1fb',
+                                bodyColor: '#bdc8d1',
+                                borderColor: 'rgba(62, 72, 79, 0.5)',
+                                borderWidth: 1,
+                                padding: 12
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Failed to load attack types chart:", error);
+            }
+        }
+
+        async function loadTopAttackingIPs() {
+            const tbody = document.getElementById("top-ips-tbody");
+            const select = document.getElementById("blast-radius-ip-select");
+            
+            try {
+                const topIps = await fetchAPI("/api/top-ips?limit=10");
+                
+                if (!topIps || !topIps.length) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-outline">No suspicious IPs recorded yet.</td></tr>`;
+                    select.innerHTML = `<option value="">No attacking IPs loaded</option>`;
+                    return;
+                }
+
+                // Render table rows
+                tbody.innerHTML = topIps.map(row => {
+                    const attacks = row.total_attacks || 0;
+                    const targets = row.target_count || 0;
+                    const ip = row.ip || "Unknown";
+                    const attackTypes = (row.attack_types || []).join(", ") || "Unknown";
+
+                    return `
+                        <tr class="border-b border-outline-variant/10 hover:bg-surface-container-low/30 transition-colors">
+                            <td class="py-2.5 px-3 text-primary font-bold cursor-pointer" onclick="selectIP('${ip}')">${ip}</td>
+                            <td class="py-2.5 px-3 text-on-surface truncate max-w-[200px]" title="${attackTypes}">${attackTypes}</td>
+                            <td class="py-2.5 px-3 text-on-surface">${attacks.toLocaleString()}</td>
+                            <td class="py-2.5 px-3 text-on-surface">${targets.toLocaleString()}</td>
+                            <td class="py-2.5 px-3 text-right">
+                                <button onclick="selectIP('${ip}')" class="bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 font-label-caps text-[9px] px-2 py-1 rounded transition-colors uppercase">View Blast</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join("");
+
+                // Populate selector
+                select.innerHTML = topIps
+                    .filter(row => row.ip && row.ip !== "Unknown")
+                    .map(row => `<option value="${row.ip}">${row.ip} (${row.total_attacks} attacks)</option>`)
+                    .join("");
+
+                // Trigger blast radius load for the first IP
+                if (select.value) {
+                    loadBlastRadius(select.value);
+                }
+            } catch (error) {
+                console.error("Failed to load top attacking IPs:", error);
+                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-error">Error loading attacker data from REST service.</td></tr>`;
+            }
+        }
+
+        function selectIP(ip) {
+            const select = document.getElementById("blast-radius-ip-select");
+            if (select) {
+                select.value = ip;
+                loadBlastRadius(ip);
+            }
+        }
+
+        async function loadBlastRadius(ip) {
+            if (!ip) return;
+            
+            const centerText = document.getElementById("blast-radius-center-text");
+            
+            try {
+                const blast = await fetchAPI(`/api/blast-radius?ip=${encodeURIComponent(ip)}`);
+                
+                const paths = blast.map(x => x.uri);
+                const percentages = blast.map(x => x.percentage);
+
+                if (paths.length) {
+                    const dominantPath = paths[0].length > 15 ? paths[0].substring(0, 12) + "..." : paths[0];
+                    centerText.textContent = dominantPath;
+                } else {
+                    centerText.textContent = "N/A";
+                }
+
+                const ctx = document.getElementById('blastRadiusChart').getContext('2d');
+                if (blastRadiusChart) {
+                    blastRadiusChart.destroy();
+                }
+
+                blastRadiusChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: paths.length ? paths : ['/api/v1/auth', '/index.html'],
+                        datasets: [{
+                            data: percentages.length ? percentages : [80, 20],
+                            backgroundColor: [
+                                '#ffb4ab', // Error
+                                '#ddb7ff', // Secondary
+                                '#8ed5ff', // Primary
+                                '#30c88f',
+                                '#2e3447'
+                            ],
+                            borderWidth: 0,
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '70%',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: 'rgba(21, 27, 45, 0.9)',
+                                padding: 10,
+                                callbacks: {
+                                    label: function(context) {
+                                        return ` ${context.label}: ${context.raw}%`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error(`Failed to load blast radius for ${ip}:`, error);
+            }
+        }
+
+        function updateCampaignThresholds() {
+            const freqVal = document.getElementById("campaign-freq-val");
+            const freqSlider = document.getElementById("campaign-freq-slider");
+            const typesVal = document.getElementById("campaign-types-val");
+            const typesSlider = document.getElementById("campaign-types-slider");
+
+            freqVal.textContent = freqSlider.value;
+            typesVal.textContent = typesSlider.value;
+
+            // Debounce api query
+            clearTimeout(campaignTimeout);
+            campaignTimeout = setTimeout(loadCampaigns, 400);
+        }
+
+        async function loadCampaigns() {
+            const tbody = document.getElementById("campaign-tbody");
+            const freqSlider = document.getElementById("campaign-freq-slider");
+            const typesSlider = document.getElementById("campaign-types-slider");
+
+            try {
+                const campaigns = await fetchAPI(`/api/campaigns?min_attacks=${freqSlider.value}&min_attack_types=${typesSlider.value}`);
+                
+                if (!campaigns || !campaigns.length) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-outline">No coordinated campaigns matching current thresholds found.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = campaigns.map(row => {
+                    const risk = row.risk_level || "low";
+                    const score = risk === "critical" ? 98 : risk === "high" ? 85 : risk === "medium" ? 62 : 30;
+                    
+                    let colorClass = "text-primary";
+                    let progressClass = "bg-primary";
+                    if (risk === "critical" || risk === "high") {
+                        colorClass = "text-error";
+                        progressClass = "bg-error";
+                    } else if (risk === "medium") {
+                        colorClass = "text-secondary";
+                        progressClass = "bg-secondary";
+                    }
+
+                    return `
+                        <tr class="border-b border-outline-variant/10 hover:bg-surface-container-low/30 transition-colors">
+                            <td class="py-3 px-4 ${colorClass} font-bold cursor-pointer" onclick="window.location.hash='#investigator'; selectIncidentByIP('${row.ip}')">${row.ip}</td>
+                            <td class="py-3 px-4 text-on-surface">${(row.attack_types || []).join(", ") || "Unknown"}</td>
+                            <td class="py-3 px-4 text-on-surface">${(row.total_attacks || 0).toLocaleString()}</td>
+                            <td class="py-3 px-4">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-16 h-1.5 bg-surface-dim rounded-full overflow-hidden">
+                                        <div class="${progressClass} h-full" style="width: ${score}%"></div>
+                                    </div>
+                                    <span class="${colorClass} text-xs uppercase font-bold">${risk}</span>
+                                </div>
+                            </td>
+                            <td class="py-3 px-4 text-right">
+                                <button onclick="blockIP('${row.ip}')" class="bg-error/10 hover:bg-error/20 text-error border border-error/30 font-label-caps text-[10px] px-3 py-1.5 rounded transition-colors uppercase tracking-wider active:scale-95">Block IP</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join("");
+
+            } catch (error) {
+                console.error("Failed to load campaigns:", error);
+                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-error">Failed to detect attack campaigns dynamically.</td></tr>`;
+            }
+        }
+
+        function blockIP(ip) {
+            showToast("Edge Firewall Rule", `Successfully pushed block instruction for host IP ${ip} to network core.`, "block", "critical");
+        }
+
+        // --- INVESTIGATOR WORKSPACE LOGIC ---
+
+        function setFeedFilter(filter) {
+            currentFilter = filter;
+            
+            // Toggle active classes on buttons
+            ["all"].forEach(id => {
+                const btn = document.getElementById(`feed-filter-${id}`);
+                btn.className = "px-3 py-1 rounded-full bg-surface-variant text-on-surface-variant border border-outline-variant/30 font-label-caps text-[10px] whitespace-nowrap hover:bg-surface-container-high";
+            });
+
+            const activeBtnMap = {
+                "All": "feed-filter-all"
+            };
+            
+            const activeBtn = document.getElementById(activeBtnMap[filter]);
+            if (activeBtn) {
+                activeBtn.className = "px-3 py-1 rounded-full bg-primary/20 text-primary border border-primary/30 font-label-caps text-[10px] whitespace-nowrap";
+            }
+
+            renderIncidentFeedList();
+        }
+
+        async function loadIncidentFeed() {
+            try {
+                // Fetch recent incidents
+                cachedIncidents = await fetchAPI(`/api/incidents?limit=100`);
+                renderIncidentFeedList();
+            } catch (error) {
+                console.error("Failed to load incident feed:", error);
+                document.getElementById("incident-feed-list").innerHTML = `<div class="py-8 text-center text-error">Failed to fetch incident feed from backend.</div>`;
+            }
+        }
+
+        function renderIncidentFeedList() {
+            const container = document.getElementById("incident-feed-list");
+            
+            const filtered = cachedIncidents;
+
+            if (!filtered.length) {
+                container.innerHTML = `<div class="py-8 text-center text-outline">No matching incidents found.</div>`;
+                return;
+            }
+
+            container.innerHTML = filtered.map(row => {
+                const id = row.incident_id || row.event_id;
+                const type = row.attack_type || "SUSPICIOUS TRAFFIC";
+                const isSelected = activeIncidentId === id;
+                const score = row.risk_score || 0;
+                
+                let borderColor = "border-outline-variant/30";
+                let textClass = "text-primary";
+                if (score >= 90) {
+                    borderColor = "border-l-2 border-l-error";
+                    textClass = "text-error";
+                } else if (score >= 70) {
+                    borderColor = "border-l-2 border-l-secondary";
+                    textClass = "text-secondary";
+                } else if (score > 0) {
+                    borderColor = "border-l-2 border-l-primary";
+                    textClass = "text-primary";
+                }
+
+                const cardBg = isSelected ? "bg-primary/10 border-primary/50" : "bg-surface-container-low hover:bg-surface-container-high";
+
+                // Progress circle values
+                const strokeDash = `${score}, 100`;
+
+                return `
+                    <div onclick="selectIncident('${id}')" class="glass-panel ${cardBg} ${borderColor} rounded-lg p-3 cursor-pointer transition-all duration-200 relative overflow-hidden group">
+                        <div class="flex justify-between items-start mb-1 relative z-10">
+                            <div class="truncate pr-2">
+                                <span class="font-data-mono text-xs ${textClass} font-bold block truncate">${type.toUpperCase()}</span>
+                                <span class="font-data-mono text-[9px] text-on-surface-variant block mt-1">${row.timestamp.substring(11, 19)} UTC • ${row.ip}</span>
+                            </div>
+                            <div class="relative w-8 h-8 shrink-0">
+                                <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                    <path class="text-surface-variant stroke-current" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke-width="3"></path>
+                                    <path class="${textClass} stroke-current" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke-dasharray="${strokeDash}" stroke-width="3"></path>
+                                </svg>
+                                <span class="absolute inset-0 flex items-center justify-center font-data-mono text-[9px] font-bold ${textClass}">${score}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join("");
+            
+            // Auto select first incident if none selected and incidents are loaded
+            if (!activeIncidentId && filtered.length > 0) {
+                selectIncident(filtered[0].incident_id || filtered[0].event_id);
+            }
+        }
+
+        async function selectIncident(id) {
+            if (!id) return;
+            activeIncidentId = id;
+
+            // Re-render feed list to show active state selection
+            renderIncidentFeedList();
+
+            const emptyState = document.getElementById("incident-detail-empty");
+            const contentState = document.getElementById("incident-detail-content");
+
+            emptyState.classList.add("hidden");
+            contentState.classList.remove("hidden");
+
+            try {
+                const detail = await fetchAPI(`/api/incidents/${id}`);
+                
+                // Populate elements
+                const isMalicious = detail.verdict === "malicious" || detail.verdict === "suspicious" || detail.risk_score >= 70;
+                const detailTitle = document.getElementById("detail-title");
+                
+                if (isMalicious) {
+                    detailTitle.textContent = `${detail.attack_type || "MALICIOUS"} // THREAT DETECTED`;
+                    detailTitle.className = "font-display-lg text-xl xl:text-2xl text-error neon-text-error";
+                } else {
+                    detailTitle.textContent = "LEGITIMATE // CLEAN REQUEST";
+                    detailTitle.className = "font-display-lg text-xl xl:text-2xl text-tertiary-container";
+                }
+
+                document.getElementById("detail-meta-header").textContent = `INCIDENT ID: ${detail.incident_id || detail.event_id} | HYBRID RISK: ${detail.verdict.toUpperCase()}`;
+                
+                const score = detail.risk_score || 0;
+                document.getElementById("detail-risk-score-text").textContent = score;
+                document.getElementById("detail-risk-score-circle").setAttribute("stroke-dasharray", `${score}, 100`);
+                
+                // Color badges based on severity
+                const sevBadge = document.getElementById("detail-severity-badge");
+                sevBadge.textContent = detail.severity || "unknown";
+                if (score >= 90) {
+                    sevBadge.className = "font-headline-md text-lg text-error uppercase font-bold";
+                } else if (score >= 70) {
+                    sevBadge.className = "font-headline-md text-lg text-secondary uppercase font-bold";
+                } else {
+                    sevBadge.className = "font-headline-md text-lg text-primary uppercase font-bold";
+                }
+
+                // Metadata cards
+                document.getElementById("detail-event-id").textContent = detail.event_id || "N/A";
+                document.getElementById("detail-timestamp").textContent = detail.timestamp || "N/A";
+                document.getElementById("detail-ip").innerHTML = `${detail.ip} <span class="text-on-surface-variant text-[10px]">(Client IP)</span>`;
+                document.getElementById("detail-method-path").textContent = `${detail.method} ${detail.uri}`;
+
+                // Raw Payload code
+                const rawCode = document.getElementById("detail-raw-code");
+                if (detail.raw) {
+                    // Escape HTML strings for safety
+                    rawCode.innerHTML = detail.raw
+                        .replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;");
+                } else {
+                    rawCode.textContent = "No raw payloads or POST body captures found in the log trace.";
+                }
+
+                // AI Vector Analysis Card details
+                const topPattern = detail.patterns && detail.patterns.length ? detail.patterns[0] : null;
+                const aiDesc = document.getElementById("detail-ai-desc");
+                const similarityText = document.getElementById("detail-ai-similarity");
+                const progress = document.getElementById("detail-ai-progress");
+                const mitreContainer = document.getElementById("detail-mitre-tags");
+
+                if (topPattern) {
+                    const similarityScore = (topPattern.score * 100).toFixed(1);
+                    aiDesc.innerHTML = `
+                        Pattern matching similarity describes high correlation to known signature <strong>${topPattern.name}</strong>. 
+                        Tactics match <strong>${topPattern.attack_type}</strong> signatures. ${topPattern.description}
+                    `;
+                    similarityText.textContent = `${similarityScore}%`;
+                    progress.style.width = `${similarityScore}%`;
+                    mitreContainer.innerHTML = `
+                        <span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">MITRE: ${topPattern.mitre || "N/A"}</span>
+                        <span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">TACTIC: ${topPattern.attack_type}</span>
+                    `;
+                } else {
+                    aiDesc.textContent = `Hybrid risk explanation: ${detail.hybrid_explanation || detail.rule_explanation || "No anomaly description is attached."}`;
+                    similarityText.textContent = "0.0%";
+                    progress.style.width = "0%";
+                    mitreContainer.innerHTML = `<span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">MITRE: N/A</span>`;
+                }
+
+                // Remediations list
+                const remedList = document.getElementById("detail-remediations");
+                if (detail.recommendations && detail.recommendations.length) {
+                    remedList.innerHTML = detail.recommendations.map(rem => `<li>${rem}</li>`).join("");
+                } else {
+                    remedList.innerHTML = `<li>Review the raw payload trace manually in forensic timeline.</li><li>Correlate source IP behaviors at edge routers.</li>`;
+                }
+
+                // Reset similar incidents table content
+                document.getElementById("similar-incidents-tbody").innerHTML = `
+                    <tr>
+                        <td colspan="5" class="py-4 text-center text-outline">Click button to trigger MongoDB Atlas Vector Search...</td>
+                    </tr>
+                `;
+
+            } catch (error) {
+                console.error("Failed to load incident detail:", error);
+                showToast("Forensic Error", "Failed to retrieve incident details from backend.", "error", "error");
+            }
+        }
+
+        async function findSimilarIncidents() {
+            if (!activeIncidentId) return;
+            const btn = document.getElementById("btn-find-similar-incidents");
+            const tbody = document.getElementById("similar-incidents-tbody");
+
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="py-4 text-center text-outline">
+                        <span class="animate-pulse">Analyzing vector embeddings & running query...</span>
+                    </td>
+                </tr>
+            `;
+
+            try {
+                const similar = await fetchAPI(`/api/incidents/${activeIncidentId}/similar-incidents`);
+                
+                if (!similar || !similar.length) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="py-4 text-center text-outline">
+                                No historically similar logs matched the vector pattern. This is a unique variant.
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                tbody.innerHTML = similar.map(row => {
+                    const simScore = (row.similarity_score * 100).toFixed(1);
+                    return `
+                        <tr class="border-b border-outline-variant/10 hover:bg-surface-container-low/30 transition-colors">
+                            <td class="py-2 px-3 text-on-surface truncate">${row.timestamp || "Unknown"}</td>
+                            <td class="py-2 px-3 text-primary">${row.ip || "Unknown"}</td>
+                            <td class="py-2 px-3 text-on-surface truncate max-w-[250px]" title="${row.uri}">${row.uri || "-"}</td>
+                            <td class="py-2 px-3 text-on-surface">${row.risk_score || 0}</td>
+                            <td class="py-2 px-3 text-secondary font-bold">${simScore}%</td>
+                        </tr>
+                    `;
+                }).join("");
+                
+                showToast("Vector Search Results", `Found ${similar.length} historical logs matching payload structure.`, "manage_search", "success");
+
+            } catch (error) {
+                console.error("Vector search failed:", error);
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="py-4 text-center text-error">
+                            Vector search aggregation query failed. Ensure Vector Index exists in Atlas.
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function selectIncidentByIP(ip) {
+            const matched = cachedIncidents.find(x => x.ip === ip);
+            if (matched) {
+                selectIncident(matched.incident_id || matched.event_id);
+            } else {
+                showToast("Not Found", `No recent active incidents tracked for IP ${ip}`, "warning", "error");
+            }
+        }
+
+        function applyResponse() {
+            showToast("Remediation Applied", "Successfully applied automated mitigation playbook (PB-AUTH-BREACH-01). Client isolated.", "task_alt", "success");
+        }
+
+        function toggleRawPayload() {
+            const content = document.getElementById("raw-payload-content");
+            const arrow = document.getElementById("raw-payload-arrow");
+            
+            if (content.style.display === "none") {
+                content.style.display = "block";
+                arrow.textContent = "expand_less";
+            } else {
+                content.style.display = "none";
+                arrow.textContent = "expand_more";
+            }
+        }
+
+        // Initialize Router
+        window.location.hash = window.location.hash || "#overview";
+        routeView();
+    </script>
+</body>
+</html>

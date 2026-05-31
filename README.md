@@ -127,7 +127,32 @@ Lưu ý: `convert.py` chỉ dừng ở bước chuyển đổi. Nếu bạn mu�
 
 ---
 
-## 6. KIỂM THỬ (TESTS)
+## 6. GIAO DIỆN ĐIỀU HÀNH SOC (DASHBOARD)
+
+Hệ thống cung cấp giao diện điều hành SOC cao cấp dựa trên Single Page Application (HTML/JS/CSS với Tailwind CSS & Chart.js) được phục vụ bởi FastAPI backend.
+
+### Khởi chạy Dashboard
+Chạy lệnh sau từ thư mục gốc của dự án:
+```bash
+python -m src.dashboard.server
+```
+Hệ thống sẽ khởi động FastAPI server tại port `8501` và tự động mở trình duyệt truy cập địa chỉ: [http://127.0.0.1:8501](http://127.0.0.1:8501)
+
+### Chạy chế độ Demo (Mock Mode)
+Để chạy thử nghiệm dashboard với bộ dữ liệu giả lập offline (không cần kết nối MongoDB Atlas):
+*   **Windows (PowerShell)**:
+    ```powershell
+    $env:DASHBOARD_USE_MOCK="1"; python -m src.dashboard.server
+    ```
+*   **Linux / macOS**:
+    ```bash
+    DASHBOARD_USE_MOCK=1 python -m src.dashboard.server
+    ```
+
+---
+
+
+## 7. KIỂM THỬ (TESTS)
 
 Chạy toàn bộ tests:
 ```bash
@@ -141,7 +166,7 @@ PYTHONDONTWRITEBYTECODE=1 pytest -q -p no:cacheprovider
 
 ---
 
-## 7. CÁC QUYẾT ĐỊNH THIẾT KẾ ĐẶC BIỆT
+## 8. CÁC QUYẾT ĐỊNH THIẾT KẾ ĐẶC BIỆT
 
 1.  **Strategy & Factory Pattern**: Được áp dụng trong module `parser`. Hệ thống tự động chọn bộ Parser phù hợp dựa trên tham số `server_type`, cho phép dễ dàng thêm các loại máy chủ mới mà không ảnh hưởng đến luồng chính.
 2.  **Schema Unification**: Tất cả dữ liệu sau khi parse được đưa về một cấu trúc (Normalizer) đồng nhất. Điều này cho phép `Detection Engine` và `Risk Engine` hoạt động độc lập với nguồn log ban đầu.

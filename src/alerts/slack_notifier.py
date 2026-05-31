@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.request
 
 from .base import BaseNotifier
@@ -49,5 +50,38 @@ class SlackNotifier(BaseNotifier):
                 False,
                 "slack alert failed",
                 dry_run=False,
-                error=exc.__class__.__name__,
+                error=_format_network_error(exc),
             )
+
+
+def _format_network_error(exc: Exception) -> str:
+    if isinstance(exc, urllib.error.HTTPError):
+        detail = _read_error_body(exc)
+        if detail:
+            return f"HTTP {exc.code}: {detail}"
+        return f"HTTP {exc.code}: {exc.reason}"
+    if isinstance(exc, urllib.error.URLError):
+        return f"URL error: {exc.reason}"
+    text = str(exc).strip()
+    if text:
+        return f"{exc.__class__.__name__}: {text}"
+    return exc.__class__.__name__
+
+
+def _read_error_body(exc: urllib.error.HTTPError) -> str:
+    try:
+        raw = exc.read()
+    except Exception:
+        return ""
+    if not raw:
+        return ""
+    text = raw.decode("utf-8", errors="replace").strip()
+    try:
+        payload = json.loads(text)
+        if isinstance(payload, dict) and payload.get("description"):
+            return str(payload["description"])[:500]
+        if isinstance(payload, dict) and payload.get("error"):
+            return str(payload["error"])[:500]
+    except Exception:
+        pass
+    return text[:500]

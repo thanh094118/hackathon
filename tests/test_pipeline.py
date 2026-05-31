@@ -75,6 +75,18 @@ def test_pipeline_cli_generates_expected_outputs(tmp_path: Path):
     assert "collector" in summary
     assert "decode_error_records" in summary["collector"]
     assert summary["server_type"] == "apache"
+    assert summary["hybrid_detection"]["method"] == "hybrid"
+    assert summary["ml"]["enabled"] is True
+
+
+    alerts = [
+        json.loads(line)
+        for line in (output_dir / "detector_results/apache_access_alerts.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert alerts
+    assert all(row["detection_method"] == "hybrid" for row in alerts)
+    assert any("rules" in row["detection_sources"] for row in alerts)
 
 
 def test_pipeline_cli_accepts_folder_input(tmp_path: Path):

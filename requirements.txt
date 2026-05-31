@@ -21,3 +21,6 @@ pandas
 joblib
 scikit-learn
 sentence-transformers
+fastapi
+uvicorn[standard]
+cryptography
