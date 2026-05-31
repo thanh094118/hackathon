@@ -32,3 +32,15 @@
 - Reset AGENTS guidance to non-ML core pipeline baseline and keep dashboard work isolated from runtime core flow changes.
 - Mandatory sentence-transformers: enforce hard requirement for sentence-transformers and remove the fallback hashing trick.
 - Robust IP Aggregation: aggregation queries grouping or matching on IP addresses must support both `$source_ip` and `$ip` using `$ifNull` array logic or `$or` matching to remain backward-compatible with normalized fields (`source_ip`) and fallback schemas.
+- Advanced SOC Analytics Aggregations:
+  - Timeline bucketing must group by both timestamp bucket and normalized attack type to support multi-series stacked/grouped visualization.
+  - Blast Radius URI distribution query must compute percentages at the aggregation layer using `$unwind` on grouped results to minimize downstream transformation overhead.
+  - Coordinated Campaign Detection (APT) parameters (min attacks, min attack types) should be completely configurable in the query arguments and UI.
+- Stream Simulator Real-Time Timestamp Alignment:
+  - During stream simulation, static CSV timestamps (from July 2020) are dynamically overridden at the producer-ingestion point with the current UTC system time (to the second) using the standard Apache access log format (`%d/%b/%Y:%H:%M:%S %z`).
+  - This ensures that simulated requests match the wall-clock time at which they are actually processed, keeping them visible inside active real-time dashboard filter boundaries (e.g., "last 15 minutes", "last 24 hours") and allowing the charts to plot live scrolling data.
+- Hybrid CQRS APT Campaign Detection:
+  - Materialize APT attack campaigns into an `active_campaigns` collection using a MongoDB Atlas Scheduled Trigger running a JavaScript aggregation pipeline every 60 seconds with a `$merge` output stage.
+  - Keep python-side dynamic queries in place to handle adjustable dynamic sliders (`min_attacks` and `min_attack_types`) in the UI campaigns table, satisfying both performance (for fast page loads / counts) and interactive flexibility requirements.
+
+

@@ -1,5 +1,6 @@
 import logging
 from typing import Dict, List, Optional
+from datetime import datetime, timezone
 
 try:
     from pymongo import MongoClient, UpdateOne
@@ -14,6 +15,45 @@ except ImportError:
     class UpdateOne: pass
     class BulkWriteError(Exception): pass
     class ConnectionFailure(Exception): pass
+
+
+def _parse_timestamp(value) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(value), tz=timezone.utc)
+        except Exception:
+            return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        pass
+
+    for fmt in (
+        "%Y-%m-%d %H:%M:%S",
+        "%Y/%m/%d %H:%M:%S",
+        "%d/%b/%Y:%H:%M:%S %z",
+        "%Y-%m-%dT%H:%M:%S.%fZ",
+        "%Y-%m-%dT%H:%M:%SZ",
+    ):
+        try:
+            dt = datetime.strptime(text, fmt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except ValueError:
+            continue
+
+    return None
 
 
 class MongoDBExporter:
@@ -70,9 +110,17 @@ class MongoDBExporter:
                 if not event_id:
                     logging.warning("Skipping log record because event_id is missing.")
                     continue
+                
+                doc = dict(record)
+                ts = doc.get("timestamp")
+                if ts:
+                    parsed_ts = _parse_timestamp(ts)
+                    if parsed_ts:
+                        doc["timestamp"] = parsed_ts
+                
                 # Update document matched by event_id, insert if it does not exist (upsert=True)
                 operations.append(
-                    UpdateOne({"event_id": event_id}, {"$set": record}, upsert=True)
+                    UpdateOne({"event_id": event_id}, {"$set": doc}, upsert=True)
                 )
                 exported_records.append(record)
 

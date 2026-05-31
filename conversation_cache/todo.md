@@ -31,3 +31,30 @@
 - [x] Resolve "Unknown" IP display in Top Attacking IPs dashboard table by migrating aggregation pipelines to handle `source_ip` vs `ip` schema mapping.
 - [x] Add dynamic dropdown filter for detection methods (All, Rules Only, ML Only, Hybrid Only) in Threat Investigator sidebar.
 - [x] Map seeded attack pattern fields (category, payload_example, mitigation) to dashboard fields (attack_type, examples, remediation) to ensure Vector Search match cards resolve correctly (Type: scanner, MITRE: T1595 | T1505) instead of displaying "Unknown" or "N/A".
+- [x] Issue 2: Advanced Aggregation Pipelines for SOC Analytics
+  - [x] Implement Coordinated Campaign Detection (APT) query logic with customizable thresholds.
+  - [x] Implement get_ip_blast_radius query logic on MongoDB and adapter/UI.
+  - [x] Update generate_attack_timeline query logic and adapter to support multi-series grouping.
+  - [x] Make Campaign thresholds configurable via Streamlit slider inputs.
+  - [x] Display Blast Radius Plotly donut chart on IP selection.
+  - [x] Render Attack Evolution Timeline as Plotly stacked bar chart.
+  - [x] Write unit tests in test_mongodb_integration.py and test_dashboard_query_adapter.py.
+  - [x] Verify all test suites pass.
+- [x] Implement real-time timestamp simulation in `scripts/simulate_stream.py` to ensure generated logs match current wall-clock time and display correctly in dashboard live panels.
+- [x] Add dynamic Timeframe Select Filter to the ThreatLens AI SOC dashboard:
+  - [x] Support timeframes: Last 15 Minutes (`15m`), Last Hour (`1h`), Last 24 Hours (`24h`), Last 7 Days (`7d`), and All Time (`all`).
+  - [x] Integrate timeframe filtering into MongoDB query functions (`src/scoring/mongodb_queries.py`).
+  - [x] Update the dashboard query adapter (`src/dashboard/query_adapter.py`) to parse timeframes and apply cutoff constraints.
+  - [x] Expose `timeframe` query parameter across FastAPI REST endpoints (`src/dashboard/api.py`).
+  - [x] Update frontend static files (`src/dashboard/static/index.html`) to dynamically refresh all widgets on timeframe dropdown changes.
+  - [x] Write and verify unit tests (`tests/test_dashboard_query_adapter.py` and `tests/test_dashboard_api.py`).
+  - [x] Verify visual rendering and interaction via browser subagent.
+- [x] Implement Hybrid CQRS APT Campaign Detection:
+  - [x] Add get_materialized_campaigns and get_campaigns_metadata helpers to `src/scoring/mongodb_queries.py`.
+  - [x] Integrate dual-path campaigns query (fast path + fallback) in `src/dashboard/query_adapter.py`.
+  - [x] Expose `/api/materialized-campaigns` endpoint in `src/dashboard/api.py`.
+  - [x] Update frontend overview card freshness display and add materialized view badge in `src/dashboard/static/index.html`.
+  - [x] Add unit tests verifying query functions and API routes.
+  - [x] Provide JavaScript Trigger code and manual configuration setup walkthrough.
+
+

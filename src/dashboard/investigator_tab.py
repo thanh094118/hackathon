@@ -129,7 +129,7 @@ def render_investigator_tab(query_engine) -> None:
         help="Filter threats based on the detection engine that triggered them."
     )
 
-    incidents = query_engine.get_recent_incidents(limit=100, method_filter=detection_method)
+    incidents = query_engine.get_recent_incidents(limit=100)
     if not incidents:
         if detection_method == "All":
             render_empty_state(
@@ -219,9 +219,54 @@ def render_investigator_tab(query_engine) -> None:
             "Vector Search is not available yet. Showing rule-based explanation or mock pattern recommendations."
         )
 
+    # ── Semantic Similar Logs ──────────────────────────────────────────────────
+    with st.expander("🔍 Semantic Similar Logs", expanded=False):
+        st.markdown(
+            "Find historically similar attack payloads using MongoDB Vector Search — "
+            "even when syntax is obfuscated or completely different."
+        )
+
+        has_embedding = isinstance(embedding, list) and len(embedding) > 0
+        if not has_embedding:
+            st.warning(
+                "⚠️ No embedding vector is available for this incident. "
+                "Semantic search requires the request to have been processed by the embedding engine."
+            )
+        else:
+            if st.button("🔍 Find Similar Incidents in History", key="btn_find_similar_incidents"):
+                with st.spinner("Searching for semantically similar incidents…"):
+                    similar_logs: List[Dict[str, Any]] = []
+                    try:
+                        similar_logs = query_engine.find_similar_requests(embedding, limit=5)
+                    except Exception as exc:
+                        st.error(f"Search failed: {exc}")
+
+                if similar_logs:
+                    similar_rows = []
+                    for item in similar_logs:
+                        sim_score = float(item.get("similarity_score", 0.0) or 0.0)
+                        similar_rows.append(
+                            {
+                                "Timestamp": item.get("timestamp", ""),
+                                "Source IP": item.get("ip", "Unknown"),
+                                "URI": str(item.get("uri", "-"))[:80],
+                                "Risk Score": item.get("risk_score", 0),
+                                "Semantic Match": f"{round(sim_score * 100, 1)}%",
+                            }
+                        )
+                    st.success(f"Found **{len(similar_rows)}** semantically similar incident(s).")
+                    safe_dataframe(similar_rows)
+                else:
+                    st.info(
+                        "No semantically similar incidents found in the database. "
+                        "This may be the first time this payload pattern has been observed."
+                    )
+    # ── End Semantic Similar Logs ──────────────────────────────────────────────
+
     st.markdown("### Rule-Based Fallback Explanation")
     st.write(query_engine.build_rule_based_explanation(detail))
 
     st.markdown("### Recommended Response")
     recommendations = query_engine.get_response_recommendations(detail, patterns=patterns)
     render_recommendation_list(recommendations)
+

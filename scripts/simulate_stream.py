@@ -31,6 +31,7 @@ import logging
 import os
 import signal
 import sys
+from datetime import datetime, timezone
 import tempfile
 import threading
 import time
@@ -53,7 +54,7 @@ log = logging.getLogger("stream_sim")
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 DEFAULT_CSV = PROJECT_ROOT / "data" / "input" / "data_capec_multilabel.csv"
-DEFAULT_BATCH_SIZE = 50
+DEFAULT_BATCH_SIZE = 100
 DEFAULT_RATE = 10          # rows per second pushed by producer
 DEFAULT_CONSUMER_WAIT = 3  # seconds consumer waits for a full batch before flushing partial
 DEFAULT_RULES = PROJECT_ROOT / "src" / "rules" / "attack_patterns.yaml"
@@ -122,6 +123,8 @@ class Producer(threading.Thread):
             for row in reader:
                 if shutdown_event.is_set():
                     return
+                # Update timestamp to the current system time to simulate real-time ingestion
+                row["timestamp"] = datetime.now(timezone.utc).strftime("%d/%b/%Y:%H:%M:%S %z")
                 self.queue.put(row)
                 self.total_produced += 1
                 if self.total_produced % 500 == 0:
@@ -263,14 +266,18 @@ class Consumer(threading.Thread):
         if not log_lines:
             return {"counts": {"raw_lines": 0, "alerts": 0}}
 
-        # Write temp file
-        tmp_path = TEMP_DIR / f"batch_{self.batch_count:06d}.log"
-        tmp_path.write_text("\n".join(log_lines) + "\n", encoding="utf-8")
+
 
         # Output dir for this batch (only used when debug_local=True)
         output_dir = TEMP_DIR / f"batch_{self.batch_count:06d}_out"
 
+        tmp_path = None
         try:
+            # Create a temporary file to store the batch log lines
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False, encoding="utf-8") as tf:
+                tf.write("\n".join(log_lines) + "\n")
+                tmp_path = Path(tf.name)
+
             # Import here to avoid circular imports at module load time
             from src.main import _run_single_pipeline
 
@@ -288,7 +295,7 @@ class Consumer(threading.Thread):
             return summary
         finally:
             # Cleanup temp log file (keep output dir if debug_local)
-            if tmp_path.exists() and not self.debug_local:
+            if tmp_path and tmp_path.exists() and not self.debug_local:
                 tmp_path.unlink(missing_ok=True)
 
 
