@@ -11,6 +11,7 @@ class ReportGenerator:
         labels = summary.get("labels", {})
         collector = summary.get("collector", {})
         ml_summary = summary.get("ml", {})
+        hybrid_summary = summary.get("hybrid_detection", {})
 
         lines = [
             "# Web Attack Detection Report",
@@ -30,6 +31,7 @@ class ReportGenerator:
             f"- Preprocessed requests: **{counts.get('preprocessed_requests', 0)}**",
             f"- Scored records: **{counts.get('scored_records', 0)}**",
             f"- Alerts: **{counts.get('alerts', 0)}**",
+            f"- Detection method: **{hybrid_summary.get('method', 'hybrid')}**",
             "",
             "## Collector Summary",
             "",
@@ -44,6 +46,20 @@ class ReportGenerator:
             f"- ML benign: **{ml_summary.get('labels', {}).get('benign', 0)}**",
             f"- ML attack: **{ml_summary.get('labels', {}).get('attack', 0)}**",
             "",
+            "## Hybrid Signal Sources",
+            "",
+        ]
+
+        source_counts = hybrid_summary.get("alert_source_counts", {})
+        if source_counts:
+            for source, count in source_counts.items():
+                lines.append(f"- `{source}`: **{count}**")
+        else:
+            lines.append("- None")
+
+        lines.extend(
+            [
+            "",
             "## Label Distribution",
             "",
             f"- Benign: **{labels.get('benign', 0)}**",
@@ -52,7 +68,8 @@ class ReportGenerator:
             "",
             "## Top Attack Types",
             "",
-        ]
+            ]
+        )
 
         for attack_type, count in summary.get("top_attack_types", []):
             lines.append(f"- `{attack_type}`: **{count}**")

@@ -70,6 +70,12 @@ def test_api_incidents():
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
+    if data:
+        assert {row["detection_method"] for row in data} == {"hybrid"}
+
+    legacy_response = client.get("/api/incidents?limit=10&method=Rules%20Only")
+    assert legacy_response.status_code == 200
+    assert legacy_response.json() == data
 
 def test_api_incident_detail_not_found():
     response = client.get("/api/incidents/non-existent-id")

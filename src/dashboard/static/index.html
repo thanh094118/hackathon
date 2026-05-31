@@ -491,10 +491,7 @@
                             <span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary text-lg">filter_list</span>
                         </h2>
                         <div class="flex gap-1 overflow-x-auto pb-1 no-scrollbar">
-                            <button id="feed-filter-all" onclick="setFeedFilter('All')" class="px-3 py-1 rounded-full bg-primary/20 text-primary border border-primary/30 font-label-caps text-[10px] whitespace-nowrap">All</button>
-                            <button id="feed-filter-rules" onclick="setFeedFilter('Rules Only')" class="px-3 py-1 rounded-full bg-surface-variant text-on-surface-variant border border-outline-variant/30 font-label-caps text-[10px] whitespace-nowrap hover:bg-surface-container-high">Rules</button>
-                            <button id="feed-filter-ml" onclick="setFeedFilter('ML Only')" class="px-3 py-1 rounded-full bg-surface-variant text-on-surface-variant border border-outline-variant/30 font-label-caps text-[10px] whitespace-nowrap hover:bg-surface-container-high">ML</button>
-                            <button id="feed-filter-hybrid" onclick="setFeedFilter('Hybrid Only')" class="px-3 py-1 rounded-full bg-surface-variant text-on-surface-variant border border-outline-variant/30 font-label-caps text-[10px] whitespace-nowrap hover:bg-surface-container-high">Hybrid</button>
+                            <button id="feed-filter-all" onclick="setFeedFilter('All')" class="px-3 py-1 rounded-full bg-primary/20 text-primary border border-primary/30 font-label-caps text-[10px] whitespace-nowrap">Hybrid Risk</button>
                         </div>
                     </div>
                     <!-- Incident list container -->
@@ -516,7 +513,7 @@
                                     <span class="material-symbols-outlined text-error text-3xl glow-error">warning</span>
                                     <h2 id="detail-title" class="font-display-lg text-xl xl:text-2xl text-error neon-text-error">MALICIOUS // THREAT DETECTED</h2>
                                 </div>
-                                <p id="detail-meta-header" class="font-data-mono text-xs text-on-surface-variant ml-11">INCIDENT ID: N/A | DETECTED VIA RULES</p>
+                                <p id="detail-meta-header" class="font-data-mono text-xs text-on-surface-variant ml-11">INCIDENT ID: N/A | CLASSIFIED VIA HYBRID RISK</p>
                             </div>
                             <div class="text-right flex items-center gap-4 justify-end">
                                 <div class="flex flex-col items-end">
@@ -1513,16 +1510,13 @@
             currentFilter = filter;
             
             // Toggle active classes on buttons
-            ["all", "rules", "ml", "hybrid"].forEach(id => {
+            ["all"].forEach(id => {
                 const btn = document.getElementById(`feed-filter-${id}`);
                 btn.className = "px-3 py-1 rounded-full bg-surface-variant text-on-surface-variant border border-outline-variant/30 font-label-caps text-[10px] whitespace-nowrap hover:bg-surface-container-high";
             });
 
             const activeBtnMap = {
-                "All": "feed-filter-all",
-                "Rules Only": "feed-filter-rules",
-                "ML Only": "feed-filter-ml",
-                "Hybrid Only": "feed-filter-hybrid"
+                "All": "feed-filter-all"
             };
             
             const activeBtn = document.getElementById(activeBtnMap[filter]);
@@ -1536,7 +1530,7 @@
         async function loadIncidentFeed() {
             try {
                 // Fetch recent incidents
-                cachedIncidents = await fetchAPI(`/api/incidents?limit=100&method=All`);
+                cachedIncidents = await fetchAPI(`/api/incidents?limit=100`);
                 renderIncidentFeedList();
             } catch (error) {
                 console.error("Failed to load incident feed:", error);
@@ -1547,18 +1541,7 @@
         function renderIncidentFeedList() {
             const container = document.getElementById("incident-feed-list");
             
-            // Filter incidents locally
-            const filtered = cachedIncidents.filter(incident => {
-                if (currentFilter === "All") return true;
-                
-                const hasRules = (incident.matched_rule_ids && incident.matched_rule_ids.length > 0) || (incident.rule_score && incident.rule_score > 0);
-                const hasML = incident.ml_label === "attack" || incident.ml_should_alert === true;
-
-                if (currentFilter === "Rules Only") return hasRules && !hasML;
-                if (currentFilter === "ML Only") return hasML && !hasRules;
-                if (currentFilter === "Hybrid Only") return hasRules && hasML;
-                return true;
-            });
+            const filtered = cachedIncidents;
 
             if (!filtered.length) {
                 container.innerHTML = `<div class="py-8 text-center text-outline">No matching incidents found.</div>`;
@@ -1642,7 +1625,7 @@
                     detailTitle.className = "font-display-lg text-xl xl:text-2xl text-tertiary-container";
                 }
 
-                document.getElementById("detail-meta-header").textContent = `INCIDENT ID: ${detail.incident_id || detail.event_id} | CLASSIFIED VIA ${detail.verdict.toUpperCase()}`;
+                document.getElementById("detail-meta-header").textContent = `INCIDENT ID: ${detail.incident_id || detail.event_id} | HYBRID RISK: ${detail.verdict.toUpperCase()}`;
                 
                 const score = detail.risk_score || 0;
                 document.getElementById("detail-risk-score-text").textContent = score;
@@ -1697,7 +1680,7 @@
                         <span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">TACTIC: ${topPattern.attack_type}</span>
                     `;
                 } else {
-                    aiDesc.textContent = `Rule-based classifier explanation: ${detail.rule_explanation || "No anomaly description is attached."}`;
+                    aiDesc.textContent = `Hybrid risk explanation: ${detail.hybrid_explanation || detail.rule_explanation || "No anomaly description is attached."}`;
                     similarityText.textContent = "0.0%";
                     progress.style.width = "0%";
                     mitreContainer.innerHTML = `<span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">MITRE: N/A</span>`;

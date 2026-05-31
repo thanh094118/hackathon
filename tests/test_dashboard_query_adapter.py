@@ -295,6 +295,19 @@ class TestFindSimilarRequestsLive:
 
 class TestQueryAdapterAdvancedFeatures:
 
+    def test_recent_incidents_use_single_hybrid_contract(self):
+        adapter = DashboardQueryAdapter(use_mock=True)
+
+        all_rows = adapter.get_recent_incidents(limit=20, method_filter="All")
+        legacy_rule_rows = adapter.get_recent_incidents(limit=20, method_filter="Rules Only")
+        legacy_ml_rows = adapter.get_recent_incidents(limit=20, method_filter="ML Only")
+
+        assert all_rows
+        assert [row["event_id"] for row in legacy_rule_rows] == [row["event_id"] for row in all_rows]
+        assert [row["event_id"] for row in legacy_ml_rows] == [row["event_id"] for row in all_rows]
+        assert {row["detection_method"] for row in all_rows} == {"hybrid"}
+        assert all("detection_sources" in row for row in all_rows)
+
     def test_get_ip_blast_radius_mock(self):
         # In mock mode, if the IP exists in mock, compute from mock
         adapter = DashboardQueryAdapter(use_mock=True)

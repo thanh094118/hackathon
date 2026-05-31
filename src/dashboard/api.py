@@ -135,12 +135,13 @@ def get_incident(incident_id: str):
         patterns = query_engine.find_similar_attack_patterns(embedding, limit=3)
     
     recommendations = query_engine.get_response_recommendations(detail, patterns=patterns)
-    rule_explanation = query_engine.build_rule_based_explanation(detail)
+    hybrid_explanation = query_engine.build_rule_based_explanation(detail)
     
     # Merge them into the response
     detail["patterns"] = patterns
     detail["recommendations"] = recommendations
-    detail["rule_explanation"] = rule_explanation
+    detail["hybrid_explanation"] = hybrid_explanation
+    detail["rule_explanation"] = hybrid_explanation
     return detail
 
 @app.get("/api/incidents/{incident_id}/similar-incidents")
