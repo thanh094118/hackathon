@@ -129,3 +129,20 @@
   - Implemented background pre-computation using a MongoDB Atlas Scheduled Trigger running a JavaScript aggregation pipeline every 60 seconds, materializing the results into `active_campaigns` using the `$merge` operator.
   - The dashboard dual-reads: overview count cards read from the fast `active_campaigns` collection (including a dynamic freshness timestamp/badge indicating the last materialization time), while the interactive campaigns table reads dynamically.
   - Created new unit tests and REST endpoints (/api/materialized-campaigns) to verify the dual-path reads. Verified all test suites pass with 100% success.
+
+- **Stateful Intelligent Alerting System (2026-05-31)**:
+  - Implemented Contextual Correlation Engine in `src/alerts/correlation_engine.py` grouping alerts by IP + time window + behavioral classifications (reconnaissance, brute_force, multi_vector).
+  - Implemented Stateful Incident Manager in `src/alerts/incident_manager.py` with cooldown period and evidence merging.
+  - Implemented Dynamic Anomaly Baseline in `src/alerts/dynamic_baseline.py` comparing counts against standard deviation offsets (3-sigma).
+  - Implemented FP Suppression Engine in `src/alerts/fp_suppression.py` matching new incidents against `false_positives` collection using Atlas Vector Search.
+  - Centralized baseline/FP search queries in `src/scoring/mongodb_queries.py`.
+  - Added new REST endpoints: `GET /api/incidents/managed`, `POST /api/incidents/{incident_id}/false-positive`, and `GET /api/baseline/status`.
+  - Wrote a comprehensive unit/integration test suite at `tests/test_smart_alerting.py` verifying all 4 engines and batch flow.
+  - Verified that all 300 tests pass successfully.
+
+- **Intelligent Alerting Enhancements (2026-05-31)**:
+  - **Severity Override during Cooldown**: Updated the Incident Manager to break active cooldowns and trigger immediate alerts if an incoming event's severity exceeds the active incident's current severity.
+  - **Endpoint-Group Specific Baselines & Min Floors**: Replaced the global minimum floor with dynamic, endpoint-group specific floors. Segmented paths into `sensitive`, `api`, `default`, and `root` groups, automatically projecting them in MongoDB via aggregation pipelines (computing 90th percentile scaled floors) and resolving them in memory.
+  - **Smokescreen Protection (Contextual Risk Separation)**: Implemented priority risk scoring in `CorrelationEngine` and `IncidentManager`. If an incident contains requests targeting different endpoint groups, its risk score and severity are determined solely by the most sensitive group present, preventing attackers from diluting high-severity threats on sensitive resources using low-severity volume/noise on static/root resources.
+  - **Verification**: Added 5 new tests to `tests/test_smart_alerting.py` (covering grouping, endpoint floors, smokescreen protection, and merge recalculation). All 309 repository tests passed.
+

@@ -77,3 +77,19 @@
   - [x] Update frontend overview card freshness display and add materialized view badge in `src/dashboard/static/index.html`.
   - [x] Add unit tests verifying query functions and API routes.
   - [x] Provide JavaScript Trigger code and manual configuration setup walkthrough.
+
+- [x] Implement Stateful Intelligent Alerting:
+  - [x] Add data models for smart alerting in `src/alerts/models.py`.
+  - [x] Implement CorrelationEngine in `src/alerts/correlation_engine.py`.
+  - [x] Implement IncidentManager in `src/alerts/incident_manager.py`.
+  - [x] Implement DynamicBaseline in `src/alerts/dynamic_baseline.py`.
+  - [x] Implement FPSuppressionEngine in `src/alerts/fp_suppression.py`.
+  - [x] Centralize baseline and FP queries in `src/scoring/mongodb_queries.py`.
+  - [x] Refactor orchestrator `process_batch_alerts` in `src/notifications/alerts.py`.
+  - [x] Integrate smart alerting into `MongoDBExporter` for auto-compatibility with pipeline runs.
+  - [x] Add Fast API endpoints in `src/dashboard/api.py`.
+  - [x] Write and verify unit and integration tests (`tests/test_smart_alerting.py`).
+  - [x] Implement Severity Override (Escalation) during cooldown.
+  - [x] Implement dynamic, endpoint-group specific baselines and min floors.
+  - [x] Implement Smokescreen Protection (Contextual Risk Separation).
+  - [x] Write regression tests and verify all test suites.

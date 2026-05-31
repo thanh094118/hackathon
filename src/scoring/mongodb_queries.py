@@ -732,3 +732,316 @@ def get_campaigns_metadata(
         logging.error(f"Error during get_campaigns_metadata: {e}")
         return {"count": 0, "last_updated": None}
 
+
+def find_similar_false_positives(
+    collection,
+    query_vector: List[float],
+    limit: int = 1,
+    index_name: str = "vector_index",
+) -> List[Dict[str, Any]]:
+    """Perform Atlas Vector Search to find similar false positives."""
+    if not query_vector:
+        return []
+
+    pipeline = [
+        {
+            "$vectorSearch": {
+                "index": index_name,
+                "path": "embedding",
+                "queryVector": query_vector,
+                "numCandidates": max(limit * 10, 20),
+                "limit": limit,
+            }
+        },
+        {
+            "$project": {
+                "_id": 1,
+                "notes": 1,
+                "incident_id": 1,
+                "score": {"$meta": "vectorSearchScore"},
+            }
+        },
+    ]
+    try:
+        return list(collection.aggregate(pipeline))
+    except Exception as e:
+        logging.error(f"Error in find_similar_false_positives: {e}")
+        return []
+
+
+def calculate_attack_baselines(db: Any, requests_collection: str = "requests", baseline_collection: str = "attack_baselines") -> Dict[str, Any]:
+    """Runs aggregation over requests to calculate baseline statistics for each hour of the week per endpoint group."""
+    coll_req = _collection(db, requests_collection)
+    if coll_req is None:
+        return {"status": "skipped", "reason": "database/collection not available"}
+
+    pipeline = [
+        {
+            "$match": {
+                "$or": [
+                    {"scoring.should_alert": True},
+                    {"scoring.final_label": {"$in": ["malicious", "suspicious"]}},
+                ]
+            }
+        },
+        {
+            "$addFields": {
+                "date_obj": {
+                    "$cond": {
+                        "if": {"$eq": [{"$type": "$timestamp"}, "date"]},
+                        "then": "$timestamp",
+                        "else": {
+                            "$dateFromString": {
+                                "dateString": "$timestamp",
+                                "onError": None,
+                                "onNull": None,
+                             }
+                        },
+                    }
+                },
+                "uri_val": {"$ifNull": ["$request.uri", "$uri"]}
+            }
+        },
+        {"$match": {"date_obj": {"$ne": None}}},
+        {
+            "$project": {
+                "hour_of_week": {
+                    "$add": [
+                        {"$multiply": [{"$subtract": [{"$dayOfWeek": "$date_obj"}, 1]}, 24]},
+                        {"$hour": "$date_obj"},
+                    ]
+                },
+                "endpoint_group": {
+                    "$cond": {
+                        "if": { "$regexMatch": { "input": {"$ifNull": ["$uri_val", ""]}, "regex": "backup|db|admin|config|settings", "options": "i" } },
+                        "then": "sensitive",
+                        "else": {
+                            "$let": {
+                                "vars": {
+                                    "parts": { "$split": [{"$ifNull": ["$uri_val", ""]}, "/"] }
+                                },
+                                "in": {
+                                    "$cond": {
+                                        "if": { "$gt": [{ "$size": "$$parts" }, 1] },
+                                        "then": {
+                                            "$cond": {
+                                                "if": { "$eq": [{ "$arrayElemAt": ["$$parts", 1] }, "api"] },
+                                                "then": {
+                                                    "$cond": {
+                                                        "if": { "$gt": [{ "$size": "$$parts" }, 2] },
+                                                        "then": { "$concat": ["api_", { "$arrayElemAt": ["$$parts", 2] }] },
+                                                        "else": "api"
+                                                    }
+                                                },
+                                                "else": { "$arrayElemAt": ["$$parts", 1] }
+                                            }
+                                        },
+                                        "else": "root"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "week_year": {
+                    "$concat": [
+                        {"$toString": {"$isoWeekYear": "$date_obj"}},
+                        "-",
+                        {"$toString": {"$isoWeek": "$date_obj"}},
+                    ]
+                },
+            }
+        },
+        {
+            "$group": {
+                "_id": {
+                    "hour_of_week": "$hour_of_week",
+                    "endpoint_group": "$endpoint_group",
+                    "week_year": "$week_year"
+                },
+                "count": {"$sum": 1},
+            }
+        },
+        {
+            "$group": {
+                "_id": {
+                    "hour_of_week": "$_id.hour_of_week",
+                    "endpoint_group": "$_id.endpoint_group"
+                },
+                "mean": {"$avg": "$count"},
+                "std_dev": {"$stdDevPop": "$count"},
+            }
+        },
+        {
+            "$merge": {
+                "into": baseline_collection,
+                "on": "_id",
+                "whenMatched": "merge",
+                "whenNotMatched": "insert",
+            }
+        },
+    ]
+
+    try:
+        coll_req.aggregate(pipeline)
+        return {"status": "success", "message": "Baseline aggregation run successfully"}
+    except Exception as e:
+        logging.error(f"Error in calculate_attack_baselines: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+def calculate_endpoint_min_floors(
+    db: Any,
+    requests_collection: str = "requests",
+    min_floors_collection: str = "endpoint_min_floors",
+    percentile: float = 0.90,
+    scale_factor: float = 0.10,
+) -> Dict[str, Any]:
+    """
+    Groups requests by endpoint_group and hourly buckets, sorts them,
+    and calculates the given percentile scaled by scale_factor as min_floor.
+    """
+    coll_req = _collection(db, requests_collection)
+    if coll_req is None:
+        return {"status": "skipped", "reason": "database/collection not available"}
+
+    pipeline = [
+        {
+            "$addFields": {
+                "date_obj": {
+                    "$cond": {
+                        "if": {"$eq": [{"$type": "$timestamp"}, "date"]},
+                        "then": "$timestamp",
+                        "else": {
+                            "$dateFromString": {
+                                "dateString": "$timestamp",
+                                "onError": None,
+                                "onNull": None,
+                            }
+                        },
+                    }
+                },
+                "uri_val": {"$ifNull": ["$request.uri", "$uri"]}
+            }
+        },
+        {"$match": {"date_obj": {"$ne": None}}},
+        {
+            "$addFields": {
+                "endpoint_group": {
+                    "$cond": {
+                        "if": { "$regexMatch": { "input": {"$ifNull": ["$uri_val", ""]}, "regex": "backup|db|admin|config|settings", "options": "i" } },
+                        "then": "sensitive",
+                        "else": {
+                            "$let": {
+                                "vars": {
+                                    "parts": { "$split": [{"$ifNull": ["$uri_val", ""]}, "/"] }
+                                },
+                                "in": {
+                                    "$cond": {
+                                        "if": { "$gt": [{ "$size": "$$parts" }, 1] },
+                                        "then": {
+                                            "$cond": {
+                                                "if": { "$eq": [{ "$arrayElemAt": ["$$parts", 1] }, "api"] },
+                                                "then": {
+                                                    "$cond": {
+                                                        "if": { "$gt": [{ "$size": "$$parts" }, 2] },
+                                                        "then": { "$concat": ["api_", { "$arrayElemAt": ["$$parts", 2] }] },
+                                                        "else": "api"
+                                                    }
+                                                },
+                                                "else": { "$arrayElemAt": ["$$parts", 1] }
+                                            }
+                                        },
+                                        "else": "root"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "hour_bucket": {
+                    "$dateToString": {
+                        "format": "%Y-%m-%dT%H:00:00Z",
+                        "date": "$date_obj"
+                    }
+                }
+            }
+        },
+        {
+            "$group": {
+                "_id": {
+                    "endpoint_group": "$endpoint_group",
+                    "hour_bucket": "$hour_bucket"
+                },
+                "count": {"$sum": 1}
+            }
+        },
+        {
+            "$sort": {"count": 1}
+        },
+        {
+            "$group": {
+                "_id": "$_id.endpoint_group",
+                "counts": {"$push": "$count"}
+            }
+        },
+        {
+            "$project": {
+                "_id": 1,
+                "min_floor": {
+                    "$let": {
+                        "vars": {
+                            "size": {"$size": "$counts"},
+                            "index": {
+                                "$floor": {
+                                    "$multiply": [
+                                        {"$size": "$counts"},
+                                        percentile
+                                    ]
+                                }
+                            }
+                        },
+                        "in": {
+                            "$let": {
+                                "vars": {
+                                    "p_val": {
+                                        "$arrayElemAt": [
+                                            "$counts",
+                                            {"$cond": [
+                                                {"$gte": ["$$index", "$$size"]},
+                                                {"$subtract": ["$$size", 1]},
+                                                "$$index"
+                                            ]}
+                                        ]
+                                    }
+                                },
+                                "in": {
+                                    "$max": [
+                                        2,
+                                        {"$floor": {"$multiply": ["$$p_val", scale_factor]}}
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "$merge": {
+                "into": min_floors_collection,
+                "on": "_id",
+                "whenMatched": "merge",
+                "whenNotMatched": "insert"
+            }
+        }
+    ]
+
+    try:
+        coll_req.aggregate(pipeline)
+        return {"status": "success", "message": "Min floors calculated and stored successfully"}
+    except Exception as e:
+        logging.error(f"Error in calculate_endpoint_min_floors: {e}")
+        return {"status": "error", "message": str(e)}
+
+

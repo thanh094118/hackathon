@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import types
 
 from src.dashboard.query_adapter import DashboardQueryAdapter
@@ -43,6 +44,33 @@ def test_dashboard_query_adapter_falls_back_when_mongodb_uri_missing(monkeypatch
     assert status["using_mock"] is True
     assert "MONGODB_URI not set" in status.get("message", "")
     assert isinstance(adapter.get_attack_timeline(), list)
+
+
+def test_soc_summary_trend_payload_in_mock_mode():
+    adapter = DashboardQueryAdapter(use_mock=True, now=datetime(2026, 5, 31, 12, 0, tzinfo=timezone.utc))
+
+    summary = adapter.get_soc_summary(timeframe="24h")
+
+    total_trend = summary.get("total_requests_trend")
+    malicious_trend = summary.get("malicious_requests_trend")
+
+    assert total_trend is not None
+    assert total_trend["comparison_label"] == "vs last 24 hours"
+    assert total_trend["percent"] is None
+    assert total_trend["delta"] == summary["total_requests"]
+    assert total_trend["direction"] == "up"
+
+    assert malicious_trend is not None
+    assert malicious_trend["delta"] == summary["malicious_requests"]
+
+
+def test_soc_summary_trend_disabled_for_all_time():
+    adapter = DashboardQueryAdapter(use_mock=True, now=datetime(2026, 5, 31, 12, 0, tzinfo=timezone.utc))
+
+    summary = adapter.get_soc_summary(timeframe="all")
+
+    assert summary.get("total_requests_trend") is None
+    assert summary.get("malicious_requests_trend") is None
 
 
 def test_find_similar_attack_patterns_delegates_to_central_query_module(monkeypatch):

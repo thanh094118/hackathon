@@ -156,6 +156,118 @@ def get_similar_incidents(incident_id: str, limit: int = Query(5, ge=1)):
     
     return query_engine.find_similar_requests(embedding, limit=limit)
 
+@app.get("/api/incidents/managed")
+def get_managed_incidents(limit: int = Query(100, ge=1)):
+    if query_engine.db is None:
+        raise HTTPException(status_code=503, detail="MongoDB is not connected")
+    try:
+        coll = query_engine.db["managed_incidents"]
+        cursor = coll.find().sort("created_at", -1).limit(limit)
+        results = list(cursor)
+        for doc in results:
+            doc["_id"] = str(doc["_id"])
+            if "created_at" in doc and hasattr(doc["created_at"], "isoformat"):
+                doc["created_at"] = doc["created_at"].isoformat()
+            if "updated_at" in doc and hasattr(doc["updated_at"], "isoformat"):
+                doc["updated_at"] = doc["updated_at"].isoformat()
+            if "cooldown_until" in doc and hasattr(doc["cooldown_until"], "isoformat"):
+                doc["cooldown_until"] = doc["cooldown_until"].isoformat()
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/incidents/{incident_id}/false-positive")
+def mark_incident_false_positive(incident_id: str, payload: dict | None = None):
+    if query_engine.db is None:
+        raise HTTPException(status_code=503, detail="MongoDB is not connected")
+    notes = ""
+    if payload:
+        notes = payload.get("notes") or ""
+    
+    from src.alerts.fp_suppression import FPSuppressionEngine
+    engine = FPSuppressionEngine(query_engine.db)
+    success = engine.mark_false_positive(incident_id, notes)
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Failed to mark incident {incident_id} as false positive")
+    return {"status": "success", "message": f"Incident {incident_id} successfully marked as false positive"}
+
+
+@app.get("/api/baseline/status")
+def get_baseline_status():
+    if query_engine.db is None:
+        raise HTTPException(status_code=503, detail="MongoDB is not connected")
+    try:
+        coll = query_engine.db["attack_baselines"]
+        baselines = list(coll.find())
+        for b in baselines:
+            b["_id"] = int(b["_id"])
+        
+        if not baselines:
+            from src.alerts.dynamic_baseline import DynamicBaseline
+            engine = DynamicBaseline(query_engine.db)
+            engine.calculate_baselines()
+            baselines = list(coll.find())
+            for b in baselines:
+                b["_id"] = int(b["_id"])
+
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        coll_req = query_engine.db["requests"]
+        pipeline = [
+            {
+                "$match": {
+                    "$or": [
+                        {"scoring.should_alert": True},
+                        {"scoring.final_label": {"$in": ["malicious", "suspicious"]}},
+                    ]
+                }
+            },
+            {
+                "$addFields": {
+                    "date_obj": {
+                        "$cond": {
+                            "if": {"$eq": [{"$type": "$timestamp"}, "date"]},
+                            "then": "$timestamp",
+                            "else": {
+                                "$dateFromString": {
+                                    "dateString": "$timestamp",
+                                    "onError": None,
+                                    "onNull": None,
+                                }
+                            },
+                        }
+                    }
+                }
+            },
+            {"$match": {"date_obj": {"$gte": now - timedelta(hours=24)}}},
+            {
+                "$project": {
+                    "hour": {"$hour": "$date_obj"},
+                    "dayOfWeek": {"$dayOfWeek": "$date_obj"}
+                }
+            },
+            {
+                "$group": {
+                    "_id": {"dayOfWeek": "$dayOfWeek", "hour": "$hour"},
+                    "count": {"$sum": 1}
+                }
+            }
+        ]
+        actual_hourly = list(coll_req.aggregate(pipeline))
+        for act in actual_hourly:
+            day = act["_id"]["dayOfWeek"] - 1
+            hour = act["_id"]["hour"]
+            act["hour_of_week"] = day * 24 + hour
+        
+        return {
+            "baselines": baselines,
+            "actual_last_24h": actual_hourly
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Serves index.html at root "/"
 @app.get("/")
 def read_index():
@@ -166,3 +278,4 @@ def read_index():
 
 # Serve all other static assets if any
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+

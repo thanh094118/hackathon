@@ -25,6 +25,8 @@ def test_api_summary():
     assert "malicious_requests" in data
     assert "total_incidents" in data
     assert "active_campaigns" in data
+    assert "total_requests_trend" in data
+    assert "malicious_requests_trend" in data
 
 def test_api_attack_types():
     response = client.get("/api/attack-types")

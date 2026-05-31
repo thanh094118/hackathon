@@ -298,8 +298,8 @@
                         <div>
                             <div id="metric-total-requests" class="font-display-lg text-3xl font-bold text-on-surface mb-1">0</div>
                             <div class="font-data-mono text-[11px] text-tertiary flex items-center gap-1">
-                                <span class="material-symbols-outlined text-[14px]">trending_up</span>
-                                <span>+12.5% vs last hour</span>
+                                <span id="trend-icon-total-requests" class="material-symbols-outlined text-[14px]">horizontal_rule</span>
+                                <span id="trend-text-total-requests">No trend</span>
                             </div>
                         </div>
                     </div>
@@ -313,8 +313,8 @@
                         <div class="relative z-10">
                             <div id="metric-malicious-requests" class="font-display-lg text-3xl font-bold text-error mb-1 neon-text-error">0</div>
                             <div class="font-data-mono text-[11px] text-error flex items-center gap-1">
-                                <span class="material-symbols-outlined text-[14px]">trending_up</span>
-                                <span>+45.2% vs last hour</span>
+                                <span id="trend-icon-malicious-requests" class="material-symbols-outlined text-[14px]">horizontal_rule</span>
+                                <span id="trend-text-malicious-requests">No trend</span>
                             </div>
                         </div>
                     </div>
@@ -1106,6 +1106,19 @@
                 animateCount("metric-total-incidents", summary.total_incidents || 0);
                 animateCount("metric-active-campaigns", summary.active_campaigns || 0);
 
+                applyTrend(
+                    "trend-icon-total-requests",
+                    "trend-text-total-requests",
+                    summary.total_requests_trend,
+                    "requests"
+                );
+                applyTrend(
+                    "trend-icon-malicious-requests",
+                    "trend-text-malicious-requests",
+                    summary.malicious_requests_trend,
+                    "requests"
+                );
+
                 const freshnessEl = document.getElementById("campaigns-freshness");
                 if (freshnessEl) {
                     if (summary.campaigns_last_updated) {
@@ -1123,6 +1136,39 @@
             } catch (error) {
                 console.error("Failed to load summary metrics:", error);
             }
+        }
+
+        function applyTrend(iconId, textId, trend, unitLabel) {
+            const iconEl = document.getElementById(iconId);
+            const textEl = document.getElementById(textId);
+            if (!iconEl || !textEl) return;
+
+            if (!trend) {
+                iconEl.textContent = "horizontal_rule";
+                textEl.textContent = "No trend";
+                return;
+            }
+
+            const direction = trend.direction || "flat";
+            if (direction === "up") {
+                iconEl.textContent = "trending_up";
+            } else if (direction === "down") {
+                iconEl.textContent = "trending_down";
+            } else {
+                iconEl.textContent = "horizontal_rule";
+            }
+
+            const comparison = trend.comparison_label ? ` ${trend.comparison_label}` : "";
+            if (trend.percent !== null && trend.percent !== undefined) {
+                const percent = Number(trend.percent) || 0;
+                const sign = percent > 0 ? "+" : "";
+                textEl.textContent = `${sign}${percent.toFixed(1)}%${comparison}`;
+                return;
+            }
+
+            const delta = Number(trend.delta || 0);
+            const deltaSign = delta > 0 ? "+" : "";
+            textEl.textContent = `${deltaSign}${delta.toLocaleString()} ${unitLabel}${comparison}`;
         }
 
         function animateCount(id, target) {

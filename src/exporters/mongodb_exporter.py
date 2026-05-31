@@ -167,22 +167,20 @@ class MongoDBExporter:
             return
 
         try:
-            from src.notifications.alerts import send_incident_alert
+            from src.notifications.alerts import process_batch_alerts
         except Exception as exc:
-            logging.warning("Alert notification wrapper is unavailable: %s", exc.__class__.__name__)
+            logging.warning("Alert notification wrapper process_batch_alerts is unavailable: %s", exc.__class__.__name__)
             return
 
-        for record in records:
-            try:
-                results = send_incident_alert(record)
-                if results:
-                    failures = [result for result in results if not getattr(result, "success", False)]
-                    if failures:
-                        logging.warning("Incident alert completed with %d failed channel(s).", len(failures))
-                    else:
-                        logging.info("Incident alert dispatched for event_id=%s.", record.get("event_id"))
-            except Exception as exc:
-                logging.warning("Incident alert failed safely: %s", exc.__class__.__name__)
+        try:
+            result = process_batch_alerts(records, db=self.db)
+            logging.info(
+                f"Batch alert processing complete. "
+                f"Processed: {result.processed_count}, Correlated: {result.correlated_count}, "
+                f"Sent: {result.alert_sent_count}, Merged: {result.merged_count}, Suppressed: {result.suppressed_count}."
+            )
+        except Exception as exc:
+            logging.warning("Batch alert processing failed safely: %s", exc.__class__.__name__)
 
     def close(self):
         if self.client:

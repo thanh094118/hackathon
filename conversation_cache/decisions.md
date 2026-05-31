@@ -56,3 +56,14 @@
 - Hybrid CQRS APT Campaign Detection:
   - Materialize APT attack campaigns into an `active_campaigns` collection using a MongoDB Atlas Scheduled Trigger running a JavaScript aggregation pipeline every 60 seconds with a `$merge` output stage.
   - Keep python-side dynamic queries in place to handle adjustable dynamic sliders (`min_attacks` and `min_attack_types`) in the UI campaigns table, satisfying both performance (for fast page loads / counts) and interactive flexibility requirements.
+
+- Stateful Intelligent Alerting Pipeline (2026-05-31):
+  - Do not use LLMs for stateful alerting. Utilize Vector Search with Atlas vector indexes as the sole mechanism for false positive suppression.
+  - Alert correlation groups alerts into `CorrelatedIncident` objects based on target IP and a customizable time window (default 5 minutes) and classifies behavioral patterns (reconnaissance, brute_force, multi_vector).
+  - Cooldown periods (default 30 minutes) are managed statefully per source IP, with subsequent evidence during cooldown merged into the parent incident to reduce alert fatigue.
+  - Dynamic baselines are computed dynamically over hour-of-week slots using standard deviation offsets (3-sigma) to adapt to traffic cycles.
+  - Suppressed incidents (either false positives or below baseline) are written to the database with `status="resolved"` or `status="closed"` and appropriate resolution notes to ensure visibility and transparency in the SOC dashboard.
+  - **Severity Override during Cooldown (Escalation)**: If an incoming alert has a higher severity than the active incident in cooldown, the cooldown is broken and a new alert notification is fired immediately.
+  - **Endpoint-Group Specific Baselines & Min Floors**: URIs are categorized into `sensitive`, `api`, `default`, and `root` groups. Aggregation calculates floors per group using a 90th percentile of traffic scaled by 10% (min 2). Falls back in memory to `sensitive`: 2, `api`: 20, `root`: 100.
+  - **Smokescreen Protection (Contextual Risk Separation)**: The risk score and severity of an incident or merged incident are calculated solely on the subset of requests targeting the most sensitive endpoint group present (e.g. `sensitive` requests take priority over `root`), preventing attackers from masking malicious activities with high-volume low-priority noise.
+

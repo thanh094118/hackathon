@@ -430,6 +430,149 @@ class DashboardQueryAdapter:
                 filtered.append(item)
         return filtered
 
+    def _timeframe_to_delta(self, timeframe: Optional[str]) -> Optional[timedelta]:
+        if not timeframe or timeframe.lower() in ("all", "all_time", ""):
+            return None
+
+        tf = timeframe.lower().strip()
+        try:
+            if tf.endswith("m"):
+                minutes = int(tf[:-1])
+                return timedelta(minutes=minutes)
+            if tf.endswith("h"):
+                hours = int(tf[:-1])
+                return timedelta(hours=hours)
+            if tf.endswith("d"):
+                days = int(tf[:-1])
+                return timedelta(days=days)
+        except Exception:
+            return None
+        return None
+
+    def _format_timeframe_label(self, timeframe: Optional[str]) -> str:
+        if not timeframe:
+            return "last period"
+
+        tf = timeframe.lower().strip()
+        if tf.endswith("m"):
+            value = _safe_int(tf[:-1], 0)
+            return f"last {value} minutes" if value != 1 else "last minute"
+        if tf.endswith("h"):
+            value = _safe_int(tf[:-1], 0)
+            return f"last {value} hours" if value != 1 else "last hour"
+        if tf.endswith("d"):
+            value = _safe_int(tf[:-1], 0)
+            return f"last {value} days" if value != 1 else "last day"
+        return "last period"
+
+    def _get_timeframe_window(self, timeframe: Optional[str]) -> Optional[Dict[str, Any]]:
+        delta = self._timeframe_to_delta(timeframe)
+        if not delta:
+            return None
+
+        base_time = self._now if self._explicit_now else datetime.now(timezone.utc)
+        end = base_time
+        start = base_time - delta
+        prev_end = start
+        prev_start = start - delta
+        return {
+            "start": start,
+            "end": end,
+            "prev_start": prev_start,
+            "prev_end": prev_end,
+            "label": self._format_timeframe_label(timeframe),
+        }
+
+    def _build_range_match(self, start: Optional[datetime], end: Optional[datetime]) -> Dict[str, Any]:
+        if not start or not end:
+            return {}
+        return {
+            "$or": [
+                {
+                    "$and": [
+                        {"timestamp": {"$type": "date"}},
+                        {"timestamp": {"$gte": start, "$lt": end}},
+                    ]
+                },
+                {
+                    "$and": [
+                        {"timestamp": {"$type": "string"}},
+                        {
+                            "$expr": {
+                                "$and": [
+                                    {
+                                        "$gte": [
+                                            {
+                                                "$dateFromString": {
+                                                    "dateString": "$timestamp",
+                                                    "onError": None,
+                                                    "onNull": None,
+                                                }
+                                            },
+                                            start,
+                                        ]
+                                    },
+                                    {
+                                        "$lt": [
+                                            {
+                                                "$dateFromString": {
+                                                    "dateString": "$timestamp",
+                                                    "onError": None,
+                                                    "onNull": None,
+                                                }
+                                            },
+                                            end,
+                                        ]
+                                    },
+                                ]
+                            }
+                        },
+                    ]
+                },
+            ]
+        }
+
+    def _filter_mock_by_range(
+        self,
+        items: List[Dict[str, Any]],
+        start: Optional[datetime],
+        end: Optional[datetime],
+    ) -> List[Dict[str, Any]]:
+        if not start or not end:
+            return items
+
+        filtered: List[Dict[str, Any]] = []
+        for item in items:
+            ts_dt = _parse_timestamp(item.get("timestamp"))
+            if ts_dt is None:
+                continue
+            if start <= ts_dt < end:
+                filtered.append(item)
+        return filtered
+
+    def _compute_trend(self, current: int, previous: int, label: str) -> Dict[str, Any]:
+        delta = current - previous
+        if delta > 0:
+            direction = "up"
+        elif delta < 0:
+            direction = "down"
+        else:
+            direction = "flat"
+
+        percent: Optional[float] = None
+        if previous > 0:
+            percent = (delta / previous) * 100.0
+
+        if percent is not None:
+            percent = round(percent, 1)
+
+        return {
+            "direction": direction,
+            "percent": percent,
+            "delta": delta,
+            "comparison_label": f"vs {label}" if label else None,
+        }
+
     def _combine_queries(self, q1: Dict[str, Any], q2: Dict[str, Any]) -> Dict[str, Any]:
         if not q1:
             return q2
@@ -452,10 +595,18 @@ class DashboardQueryAdapter:
     # -------------------------
 
     def get_soc_summary(self, timeframe: Optional[str] = None) -> Dict[str, Any]:
+        window = self._get_timeframe_window(timeframe)
         if self.is_mock_mode():
-            requests = self._filter_mock_by_timeframe(self._mock["requests"], timeframe)
-            incidents = self._filter_mock_by_timeframe(self._mock["incidents"], timeframe)
+            if window:
+                requests = self._filter_mock_by_range(self._mock["requests"], window["start"], window["end"])
+                incidents = self._filter_mock_by_range(self._mock["incidents"], window["start"], window["end"])
+                prev_requests = self._filter_mock_by_range(self._mock["requests"], window["prev_start"], window["prev_end"])
+            else:
+                requests = self._filter_mock_by_timeframe(self._mock["requests"], timeframe)
+                incidents = self._filter_mock_by_timeframe(self._mock["incidents"], timeframe)
+                prev_requests = []
             malicious = [row for row in requests if _is_malicious_record(row)]
+            prev_malicious = [row for row in prev_requests if _is_malicious_record(row)]
             campaigns = self.get_active_campaigns(min_attacks=10, timeframe=timeframe)
             high_incidents = [
                 row
@@ -463,6 +614,8 @@ class DashboardQueryAdapter:
                 if str(row.get("severity", "")).lower() in {"high", "critical"}
                 or _safe_int(row.get("risk_score"), 0) >= 80
             ]
+            total_trend = self._compute_trend(len(requests), len(prev_requests), window["label"]) if window else None
+            malicious_trend = self._compute_trend(len(malicious), len(prev_malicious), window["label"]) if window else None
             return {
                 "total_requests": len(requests),
                 "malicious_requests": len(malicious),
@@ -470,9 +623,14 @@ class DashboardQueryAdapter:
                 "active_campaigns": len(campaigns),
                 "campaigns_last_updated": None,
                 "high_severity_incidents": len(high_incidents),
+                "total_requests_trend": total_trend,
+                "malicious_requests_trend": malicious_trend,
             }
 
-        tf_match = self._build_timeframe_match(timeframe)
+        if window:
+            tf_match = self._build_range_match(window["start"], window["end"])
+        else:
+            tf_match = self._build_timeframe_match(timeframe)
 
         requests_count = self._count_documents(self.requests_collection_name, tf_match)
         malicious_count = self._count_documents(
@@ -509,6 +667,18 @@ class DashboardQueryAdapter:
 
         materialized = self._get_materialized_campaigns_count()
 
+        total_trend = None
+        malicious_trend = None
+        if window:
+            prev_match = self._build_range_match(window["prev_start"], window["prev_end"])
+            prev_requests = self._count_documents(self.requests_collection_name, prev_match)
+            prev_malicious = self._count_documents(
+                self.requests_collection_name,
+                self._combine_queries(prev_match, self._malicious_match_query()),
+            )
+            total_trend = self._compute_trend(requests_count, prev_requests, window["label"])
+            malicious_trend = self._compute_trend(malicious_count, prev_malicious, window["label"])
+
         return {
             "total_requests": requests_count,
             "malicious_requests": malicious_count,
@@ -516,6 +686,8 @@ class DashboardQueryAdapter:
             "active_campaigns": materialized.get("count", 0),
             "campaigns_last_updated": materialized.get("last_updated"),
             "high_severity_incidents": high_severity,
+            "total_requests_trend": total_trend,
+            "malicious_requests_trend": malicious_trend,
         }
 
     def get_attack_type_distribution(self, timeframe: Optional[str] = None) -> List[Dict[str, Any]]:
