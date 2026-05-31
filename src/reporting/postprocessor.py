@@ -38,10 +38,14 @@ class PostProcessor:
             if row.get("ml_attack_type")
         )
         rule_hits = Counter()
+        detection_sources = Counter()
         for row in alerts:
             for rule_id in row.get("matched_rule_ids", []):
                 if rule_id:
                     rule_hits[rule_id] += 1
+            for source in row.get("detection_sources", []):
+                if source:
+                    detection_sources[str(source)] += 1
 
         return {
             "input_path": input_path,
@@ -63,6 +67,10 @@ class PostProcessor:
                 "malicious": label_counts.get("malicious", 0),
             },
             "top_attack_types": alert_attack_types.most_common(5),
+            "hybrid_detection": {
+                "method": "hybrid",
+                "alert_source_counts": dict(sorted(detection_sources.items())),
+            },
             "ml": {
                 "enabled": bool(ml_predictions),
                 "prediction_count": len(ml_predictions or []),

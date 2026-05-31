@@ -132,7 +132,7 @@ def _normalize_attack_type(value: Any) -> str:
 
 
 def _normalize_label(record: Mapping[str, Any]) -> str:
-    raw = _first_non_empty(record, "prediction.label", "final_label", "ml_label", "label")
+    raw = _first_non_empty(record, "final_label", "prediction.label", "label", "ml_label")
     if raw is None:
         return "unknown"
     text = str(raw).strip().lower()
@@ -200,6 +200,32 @@ def _is_malicious_record(record: Mapping[str, Any]) -> bool:
     return _extract_risk_score(record) >= 70
 
 
+def _extract_detection_sources(record: Mapping[str, Any]) -> List[str]:
+    raw_sources = _first_non_empty(record, "detection_sources")
+    sources: List[str] = []
+
+    if isinstance(raw_sources, str):
+        raw_sources = [raw_sources]
+    if isinstance(raw_sources, (list, tuple, set)):
+        for value in raw_sources:
+            text = str(value or "").strip().lower()
+            if text and text not in sources:
+                sources.append(text)
+
+    if sources:
+        return sources
+
+    if record.get("matched_rule_ids") or _safe_int(record.get("rule_score"), 0) > 0:
+        sources.append("rules")
+    ml_label = str(record.get("ml_label") or "").strip().lower()
+    if ml_label in {"attack", "malicious", "suspicious"} or record.get("ml_should_alert"):
+        sources.append("ml")
+    if _safe_int(record.get("risk_bonus"), 0) > 0:
+        sources.append("features")
+
+    return sources
+
+
 def _normalize_request_record(record: Mapping[str, Any]) -> Dict[str, Any]:
     incident_id = _first_non_empty(record, "incident_id", "event_id", "_id")
     event_id = _first_non_empty(record, "event_id", "_id")
@@ -230,6 +256,10 @@ def _normalize_request_record(record: Mapping[str, Any]) -> Dict[str, Any]:
         "should_alert": record.get("should_alert"),
         "ml_attack_type": record.get("ml_attack_type"),
         "rule_score": record.get("rule_score"),
+        "detection_method": "hybrid",
+        "detection_sources": _extract_detection_sources(record),
+        "primary_signal": str(record.get("primary_signal") or "unknown"),
+        "risk_input_scores": record.get("risk_input_scores") or {},
     }
 
     if not isinstance(normalized["matched_rule_ids"], list):
@@ -828,44 +858,11 @@ class DashboardQueryAdapter:
                 _normalize_request_record(record)
                 for record in incidents
             ]
-            if method_filter != "All":
-                filtered = []
-                for row in rows:
-                    has_rules = bool(row.get("matched_rule_ids") or row.get("rule_score", 0) > 0)
-                    has_ml = bool(row.get("ml_label") == "attack" or row.get("ml_should_alert"))
-                    if method_filter == "Rules Only" and has_rules and not has_ml:
-                        filtered.append(row)
-                    elif method_filter == "ML Only" and has_ml and not has_rules:
-                        filtered.append(row)
-                    elif method_filter == "Hybrid Only" and has_rules and has_ml:
-                        filtered.append(row)
-                rows = filtered
             rows.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
             return rows[:limit]
 
         tf_match = self._build_timeframe_match(timeframe)
-        query: Dict[str, Any] = {}
-        if method_filter != "All":
-            has_rules_cond = {
-                "$or": [
-                    {"matched_rule_ids.0": {"$exists": True}},
-                    {"rule_score": {"$gt": 0}}
-                ]
-            }
-            has_ml_cond = {
-                "$or": [
-                    {"ml_label": "attack"},
-                    {"ml_should_alert": True}
-                ]
-            }
-            if method_filter == "Rules Only":
-                query = {"$and": [has_rules_cond, {"$nor": [has_ml_cond]}]}
-            elif method_filter == "ML Only":
-                query = {"$and": [has_ml_cond, {"$nor": [has_rules_cond]}]}
-            elif method_filter == "Hybrid Only":
-                query = {"$and": [has_rules_cond, has_ml_cond]}
-
-        query = self._combine_queries(tf_match, query)
+        query: Dict[str, Any] = self._combine_queries(tf_match, {})
 
         incident_records = self._find_many(
             self.incidents_collection_name,
@@ -972,6 +969,9 @@ class DashboardQueryAdapter:
         attack_type = _normalize_attack_type(incident.get("attack_type"))
         risk_score = _safe_int(incident.get("risk_score"), 0)
         prediction_score = _safe_number(incident.get("prediction_score"), 0.0)
+        detection_sources = incident.get("detection_sources") or []
+        if not isinstance(detection_sources, list):
+            detection_sources = [str(detection_sources)]
 
         matched_rule_ids = incident.get("matched_rule_ids") or []
         if not isinstance(matched_rule_ids, list):
@@ -999,12 +999,14 @@ class DashboardQueryAdapter:
             reason_parts.append(f"classified as {attack_type}")
         if matched_rule_ids:
             reason_parts.append(f"matched rules: {', '.join(str(x) for x in matched_rule_ids[:4])}")
+        if detection_sources:
+            reason_parts.append(f"hybrid sources: {', '.join(str(x) for x in detection_sources)}")
         if indicator_tokens:
             reason_parts.append(f"contains suspicious tokens ({', '.join(indicator_tokens[:5])})")
         reason_parts.append(f"risk score {risk_score}")
         reason_parts.append(f"prediction confidence {round(prediction_score * 100, 1)}%")
 
-        return "This request was flagged because it was " + "; ".join(reason_parts) + "."
+        return "This request was flagged by the hybrid risk engine because it was " + "; ".join(reason_parts) + "."
 
     def get_response_recommendations(self, incident: Mapping[str, Any], patterns: Optional[List[Mapping[str, Any]]] = None) -> List[str]:
         if patterns:

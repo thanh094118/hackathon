@@ -170,25 +170,23 @@ def _run_single_pipeline(
 	detector = RuleDetector(rules_path=rules_path, enrich=False)
 	risk_engine = RiskEngine()
 
-	# 1. Rules detection
-	rule_records: List[Dict[str, Any]] = []
+	# Rules and ML only add signals; RiskEngine owns the final hybrid verdict.
+	detected_records: List[Dict[str, Any]] = []
 	for record in feature_records:
 		detection = detector.detect(record)
 		enriched = dict(record)
 		enriched.update(detection)
-		rule_records.append(enriched)
+		detected_records.append(enriched)
 
-	# 2. ML predictions in parallel if enabled
 	ml_predictions: List[Dict[str, Any]] = []
 	if ml_enable:
-		ml_predictions = _apply_ml_predictions(rule_records, ml_model_dir, ml_threshold)
+		ml_predictions = _apply_ml_predictions(detected_records, ml_model_dir, ml_threshold)
 		if ml_predictions:
-			rule_records = ml_predictions
+			detected_records = ml_predictions
 
-	# 3. Aggregation via RiskEngine
 	scored_records: List[Dict[str, Any]] = []
 	alerts: List[Dict[str, Any]] = []
-	for record in rule_records:
+	for record in detected_records:
 		scored = risk_engine.score(record)
 		enriched = dict(record)
 		enriched.update(scored)
@@ -356,13 +354,13 @@ def _apply_ml_predictions(
 ) -> List[Dict[str, Any]]:
 	if not ml_model_dir:
 		logging.info("[!] ML enabled but no model directory was provided; skipping ML stage")
-		return records
+		return []
 
 	try:
 		predictor = MLPredictor(model_dir=ml_model_dir, threshold=ml_threshold)
 	except FileNotFoundError as exc:
 		logging.info("[!] ML artifacts not found at %s: %s", ml_model_dir, exc)
-		return records
+		return []
 
 	return predictor.predict_records(records)
 
