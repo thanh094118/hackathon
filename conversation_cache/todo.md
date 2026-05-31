@@ -1,5 +1,15 @@
 # TODO
 
+- [x] Restructure requests and incidents collections to Schema Version 2:
+  - [x] Create schema definition modules [src/schemas/mongodb_schema.py](file:///d:/Code/test/hackathon/src/schemas/mongodb_schema.py) and [src/schemas/field_mapping.py](file:///d:/Code/test/hackathon/src/schemas/field_mapping.py).
+  - [x] Create offline database migration script in [scripts/migrate_collections.py](file:///d:/Code/test/hackathon/scripts/migrate_collections.py).
+  - [x] Modify [src/exporters/mongodb_exporter.py](file:///d:/Code/test/hackathon/src/exporters/mongodb_exporter.py) and [src/main.py](file:///d:/Code/test/hackathon/src/main.py) to export Schema Version 2 nested records.
+  - [x] Update aggregation query library [src/scoring/mongodb_queries.py](file:///d:/Code/test/hackathon/src/scoring/mongodb_queries.py) to query the clean nested schema structure directly.
+  - [x] Update query adapter [src/dashboard/query_adapter.py](file:///d:/Code/test/hackathon/src/dashboard/query_adapter.py) to query the clean nested schema directly.
+  - [x] Run migration script on the live test database, migrating all 28,492 requests and 15,403 incidents.
+  - [x] Clean up temporary dual-write logic to write pure nested documents.
+  - [x] Add integration tests in `tests/test_schema_integration.py` and run full regression test suites.
+
 - [x] Add standalone `src/alerts/` notification package.
 - [x] Add alert event/result models, config loader, formatter, notifier implementations, and dispatcher.
 - [x] Add `tests/test_alerts.py` covering flexible mapping, formatting, dispatcher behavior, dry-runs, and missing credentials.
@@ -13,16 +23,16 @@
 - [x] Add tests for notifications wrapper and attack simulator.
 - [ ] Future: validate real SMTP/Telegram/Slack and live MongoDB alert delivery in a configured demo environment.
 - [ ] Add dashboard Settings section for MongoDB-backed encrypted alert credentials.
-  - [x] Create implementation plan in `conversation_cache/alert_settings_plan.md`.
-  - [x] Add encryption helper and dependency.
-  - [x] Add MongoDB alert settings store.
-  - [x] Add effective alert config loading from MongoDB with env fallback.
-  - [x] Add dashboard API endpoints for alert settings get/save/test.
-  - [x] Add Settings UI in `src/dashboard/static/index.html`.
-  - [x] Add focused tests and verification.
-  - [x] Improve dashboard/API diagnostics for missing saved settings and invalid encryption key.
-  - [x] Improve Telegram/Slack test-alert failure diagnostics with HTTP status/body and channel-specific UI errors.
-  - [ ] Future: validate visually in a live browser session and test against a configured MongoDB instance with a real `ALERT_SETTINGS_ENCRYPTION_KEY`.
+-   - [x] Create implementation plan in `conversation_cache/alert_settings_plan.md`.
+-   - [x] Add encryption helper and dependency.
+-   - [x] Add MongoDB alert settings store.
+-   - [x] Add effective alert config loading from MongoDB with env fallback.
+-   - [x] Add dashboard API endpoints for alert settings get/save/test.
+-   - [x] Add Settings UI in `src/dashboard/static/index.html`.
+-   - [x] Add focused tests and verification.
+-   - [x] Improve dashboard/API diagnostics for missing saved settings and invalid encryption key.
+-   - [x] Improve Telegram/Slack test-alert failure diagnostics with HTTP status/body and channel-specific UI errors.
+-   - [ ] Future: validate visually in a live browser session and test against a configured MongoDB instance with a real `ALERT_SETTINGS_ENCRYPTION_KEY`.
 
 - [x] Add `src/scoring/mongodb_queries.py` centralized query helper module for dashboard complex queries.
 - [x] Refactor `src/dashboard/query_adapter.py` delegation to centralized MongoDB query functions.
@@ -67,5 +77,3 @@
   - [x] Update frontend overview card freshness display and add materialized view badge in `src/dashboard/static/index.html`.
   - [x] Add unit tests verifying query functions and API routes.
   - [x] Provide JavaScript Trigger code and manual configuration setup walkthrough.
-
-

@@ -76,7 +76,8 @@ def test_pipeline_cli_generates_expected_outputs(tmp_path: Path):
     assert "decode_error_records" in summary["collector"]
     assert summary["server_type"] == "apache"
     assert summary["hybrid_detection"]["method"] == "hybrid"
-    assert summary["ml"]["enabled"] is False
+    assert summary["ml"]["enabled"] is True
+
 
     alerts = [
         json.loads(line)

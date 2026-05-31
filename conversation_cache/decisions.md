@@ -1,4 +1,14 @@
-# Decisions (2026-05-30)
+# Decisions (2026-05-31)
+
+- Restructure requests and incidents collections to Schema Version 2:
+  - Flattened root-level security log fields are nested into structured sub-documents: `request` (HTTP request metadata), `preprocessed` (preprocessor output), `features` (numeric features/embedding), `detection` (ml/rules detections), and `scoring` (final risk levels/labels).
+  - To preserve Atlas Vector Search indices, the 384-dimensional `embedding` float array is kept at the root level of the document.
+  - Incident details are denormalized inside the `incidents` collection, containing the complete nested request details to avoid cross-collection joins.
+- Schema Migration Approach:
+  - Migrate all existing historical documents in-place via an offline bulk batch migration script (`scripts/migrate_collections.py`).
+  - Upgrade the exporters and main pipeline to write the clean, nested Schema Version 2 format going forward.
+- Pure Nested Schema Implementation (No Flat Fallback):
+  - Do not implement any flat fallbacks or backward compatibility in the aggregation queries or dashboard query adapter. All database documents must reside in nested Schema Version 2, and all queries and python code must query and parse these nested structures directly.
 
 - Alert notifications remain loosely coupled in `src/alerts/`; no parser, normalizer, detection, scoring, exporter, or main pipeline integration is implemented yet.
 - Alert delivery must return `AlertSendResult` objects and isolate channel failures so one failed notifier does not crash or block other channels.
@@ -46,5 +56,3 @@
 - Hybrid CQRS APT Campaign Detection:
   - Materialize APT attack campaigns into an `active_campaigns` collection using a MongoDB Atlas Scheduled Trigger running a JavaScript aggregation pipeline every 60 seconds with a `$merge` output stage.
   - Keep python-side dynamic queries in place to handle adjustable dynamic sliders (`min_attacks` and `min_attack_types`) in the UI campaigns table, satisfying both performance (for fast page loads / counts) and interactive flexibility requirements.
-
-

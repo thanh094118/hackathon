@@ -1,4 +1,13 @@
-# Current Status (2026-05-30)
+# Current Status (2026-05-31)
+
+- **MongoDB Schema Restructuring (Flat to Nested Schema Version 2)**:
+  - Restructured flat database structures into logical nested sub-documents (`request`, `preprocessed`, `features`, `detection`, `scoring`) to align with production best practices.
+  - Implemented schema definitions, conversion mapping, and validation helpers in [src/schemas/mongodb_schema.py](file:///d:/Code/test/hackathon/src/schemas/mongodb_schema.py) and [src/schemas/field_mapping.py](file:///d:/Code/test/hackathon/src/schemas/field_mapping.py).
+  - Created and ran an offline in-place migration script [scripts/migrate_collections.py](file:///d:/Code/test/hackathon/scripts/migrate_collections.py), successfully updating 28,492 `requests` documents and 15,403 `incidents` documents in the MongoDB Atlas cluster.
+  - Modified [src/exporters/mongodb_exporter.py](file:///d:/Code/test/hackathon/src/exporters/mongodb_exporter.py) and [src/main.py](file:///d:/Code/test/hackathon/src/main.py) to export newly processed records in the clean Version 2 nested format.
+  - Updated aggregation queries in [src/scoring/mongodb_queries.py](file:///d:/Code/test/hackathon/src/scoring/mongodb_queries.py) to query the clean nested schema directly.
+  - Updated [src/dashboard/query_adapter.py](file:///d:/Code/test/hackathon/src/dashboard/query_adapter.py) to query and parse the nested schema directly without flat fallback.
+  - Verified with comprehensive unit/integration tests (`tests/test_schema_integration.py` etc.). All 294 tests passed successfully.
 
 - **Alert Credential Settings Planning (2026-05-31)**:
   - Inspected `src/dashboard/server.py`, `src/dashboard/api.py`, `src/dashboard/static/index.html`, and `src/alerts/config.py` / `dispatcher.py`.
@@ -21,7 +30,7 @@
     - `python -m compileall src` passed.
     - Initial pytest run without `PYTHONPATH=.` failed with `ModuleNotFoundError: No module named 'src'` in this interpreter.
     - `$env:PYTHONPATH='.'; pytest -q tests/test_alerts.py tests/test_alert_settings_store.py tests/test_dashboard_api.py` passed: 31 tests.
-  - Generated `__pycache__` directories from compile/test were removed.
+    - Generated `__pycache__` directories from compile/test were removed.
 
 - **Alert Settings Error Diagnostics Fix (2026-05-31)**:
   - Investigated browser errors:
@@ -34,7 +43,7 @@
   - Verification:
     - `python -m compileall src` passed.
     - `$env:PYTHONPATH='.'; pytest -q tests/test_alert_settings_store.py tests/test_dashboard_api.py` passed: 22 tests.
-  - Generated `__pycache__` directories from compile/test were removed.
+    - Generated `__pycache__` directories from compile/test were removed.
 
 - **Telegram/Slack Alert Failure Diagnostics (2026-05-31)**:
   - Investigated user-visible test result where Telegram returned only `error: "HTTPError"`.
@@ -45,7 +54,7 @@
   - Verification:
     - `python -m compileall src` passed.
     - `$env:PYTHONPATH='.'; pytest -q tests/test_alerts.py tests/test_dashboard_api.py` passed: 29 tests.
-  - Generated `__pycache__` directories from compile/test were removed.
+    - Generated `__pycache__` directories from compile/test were removed.
 
 - **Loose-Coupled Alert Notifications (2026-05-31)**:
   - Added standalone `src/alerts/` package for reusable Email, Telegram, and Slack alert delivery.
@@ -120,4 +129,3 @@
   - Implemented background pre-computation using a MongoDB Atlas Scheduled Trigger running a JavaScript aggregation pipeline every 60 seconds, materializing the results into `active_campaigns` using the `$merge` operator.
   - The dashboard dual-reads: overview count cards read from the fast `active_campaigns` collection (including a dynamic freshness timestamp/badge indicating the last materialization time), while the interactive campaigns table reads dynamically.
   - Created new unit tests and REST endpoints (/api/materialized-campaigns) to verify the dual-path reads. Verified all test suites pass with 100% success.
-

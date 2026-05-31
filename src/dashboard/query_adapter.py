@@ -132,7 +132,10 @@ def _normalize_attack_type(value: Any) -> str:
 
 
 def _normalize_label(record: Mapping[str, Any]) -> str:
-    raw = _first_non_empty(record, "final_label", "prediction.label", "label", "ml_label")
+    scoring = record.get("scoring") or {}
+    detection = record.get("detection") or {}
+    ml = detection.get("ml") or {}
+    raw = scoring.get("final_label") or ml.get("label") or record.get("label")
     if raw is None:
         return "unknown"
     text = str(raw).strip().lower()
@@ -142,17 +145,12 @@ def _normalize_label(record: Mapping[str, Any]) -> str:
 
 
 def _extract_prediction_score(record: Mapping[str, Any]) -> float:
-    value = _first_non_empty(
-        record,
-        "prediction.score",
-        "prediction.confidence",
-        "ml_attack_probability",
-        "ml_confidence",
-        "score",
-    )
+    detection = record.get("detection") or {}
+    ml = detection.get("ml") or {}
+    value = ml.get("probability") or ml.get("confidence") or ml.get("score")
     if value is None:
-        # Fallback: derive from risk_score (0-100) when ML fields are absent
-        risk = _first_non_empty(record, "risk_score", "rule_score")
+        scoring = record.get("scoring") or {}
+        risk = scoring.get("risk_score")
         if risk is not None:
             return max(0.0, min(_safe_number(risk) / 100.0, 1.0))
         return 0.0
@@ -163,7 +161,8 @@ def _extract_prediction_score(record: Mapping[str, Any]) -> float:
 
 
 def _extract_risk_score(record: Mapping[str, Any]) -> int:
-    value = _first_non_empty(record, "risk_score", "rule_score", "prediction.risk_score")
+    scoring = record.get("scoring") or {}
+    value = scoring.get("risk_score")
     if value is None:
         score = _extract_prediction_score(record)
         return _safe_int(score * 100)
@@ -171,7 +170,10 @@ def _extract_risk_score(record: Mapping[str, Any]) -> int:
 
 
 def _extract_severity(record: Mapping[str, Any], risk_score: int) -> str:
-    raw = _first_non_empty(record, "severity", "rule_severity", "risk_level")
+    scoring = record.get("scoring") or {}
+    detection = record.get("detection") or {}
+    rules = detection.get("rules") or {}
+    raw = scoring.get("risk_level") or rules.get("severity") or record.get("severity")
     if raw is not None:
         text = str(raw).strip().lower()
         if text:
@@ -193,7 +195,10 @@ def _is_malicious_record(record: Mapping[str, Any]) -> bool:
     if label in {"malicious", "suspicious", "attack", "attacker", "anomaly", "anomalous"}:
         return True
 
-    attack_type = _normalize_attack_type(_first_non_empty(record, "attack_type", "prediction.attack_type"))
+    detection = record.get("detection") or {}
+    rules = detection.get("rules") or {}
+    ml = detection.get("ml") or {}
+    attack_type = _normalize_attack_type(rules.get("attack_type") or ml.get("attack_type"))
     if attack_type.lower() not in {"unknown", "", "none", "normal", "benign"}:
         return True
 
@@ -201,7 +206,8 @@ def _is_malicious_record(record: Mapping[str, Any]) -> bool:
 
 
 def _extract_detection_sources(record: Mapping[str, Any]) -> List[str]:
-    raw_sources = _first_non_empty(record, "detection_sources")
+    scoring = record.get("scoring") or {}
+    raw_sources = scoring.get("detection_sources")
     sources: List[str] = []
 
     if isinstance(raw_sources, str):
@@ -215,51 +221,61 @@ def _extract_detection_sources(record: Mapping[str, Any]) -> List[str]:
     if sources:
         return sources
 
-    if record.get("matched_rule_ids") or _safe_int(record.get("rule_score"), 0) > 0:
+    detection = record.get("detection") or {}
+    rules = detection.get("rules") or {}
+    ml = detection.get("ml") or {}
+    if rules.get("matched_ids") or _safe_int(rules.get("score"), 0) > 0:
         sources.append("rules")
-    ml_label = str(record.get("ml_label") or "").strip().lower()
-    if ml_label in {"attack", "malicious", "suspicious"} or record.get("ml_should_alert"):
+    ml_label = str(ml.get("label") or "").strip().lower()
+    if ml_label in {"attack", "malicious", "suspicious"} or ml.get("should_alert"):
         sources.append("ml")
-    if _safe_int(record.get("risk_bonus"), 0) > 0:
+    if _safe_int(scoring.get("risk_bonus"), 0) > 0:
         sources.append("features")
 
     return sources
 
 
 def _normalize_request_record(record: Mapping[str, Any]) -> Dict[str, Any]:
-    incident_id = _first_non_empty(record, "incident_id", "event_id", "_id")
-    event_id = _first_non_empty(record, "event_id", "_id")
+    incident_id = record.get("incident_id") or record.get("event_id") or record.get("_id")
+    event_id = record.get("event_id") or record.get("_id")
 
     risk_score = _extract_risk_score(record)
     prediction_score = _extract_prediction_score(record)
 
+    request = record.get("request") or {}
+    preprocessed = record.get("preprocessed") or {}
+    detection = record.get("detection") or {}
+    rules = detection.get("rules") or {}
+    ml = detection.get("ml") or {}
+    scoring = record.get("scoring") or {}
+
     normalized = {
         "incident_id": str(incident_id) if incident_id is not None else str(event_id) if event_id is not None else "",
         "event_id": str(event_id) if event_id is not None else "",
-        "timestamp": _timestamp_to_text(_first_non_empty(record, "timestamp", "time", "@timestamp", "created_at")),
-        "ip": str(_first_non_empty(record, "ip", "source_ip", "client_ip", "c_ip") or "Unknown"),
-        "method": str(_first_non_empty(record, "method", "http_method", "verb", "cs_method") or "-"),
-        "uri": str(_first_non_empty(record, "uri", "original_url", "raw_uri", "url", "request_uri") or "-"),
-        "attack_type": _normalize_attack_type(_first_non_empty(record, "attack_type", "prediction.attack_type", "ml_attack_type")),
+        "timestamp": _timestamp_to_text(record.get("timestamp")),
+        "ip": str(request.get("source_ip") or "Unknown"),
+        "method": str(request.get("method") or "-"),
+        "uri": str(request.get("uri") or "-"),
+        "attack_type": _normalize_attack_type(rules.get("attack_type") or ml.get("attack_type")),
         "risk_score": risk_score,
         "prediction_score": round(prediction_score, 4),
         "severity": _extract_severity(record, risk_score),
         "verdict": _normalize_label(record),
-        "user_agent": str(_first_non_empty(record, "user_agent", "ua", "request_user_agent", "cs_user_agent") or ""),
-        "raw": str(_first_non_empty(record, "raw", "raw_log", "raw_line", "raw_request") or ""),
-        "normalized_request": str(_first_non_empty(record, "normalized_request", "request", "normalized_uri") or ""),
-        "matched_rule_ids": _first_non_empty(record, "matched_rule_ids") or [],
-        "matched_rules": _first_non_empty(record, "matched_rules") or [],
-        "embedding": _first_non_empty(record, "embedding", "features.embedding") or [],
-        "ml_label": record.get("ml_label"),
-        "ml_should_alert": record.get("ml_should_alert"),
-        "should_alert": record.get("should_alert"),
-        "ml_attack_type": record.get("ml_attack_type"),
-        "rule_score": record.get("rule_score"),
-        "detection_method": "hybrid",
+        "user_agent": str(request.get("user_agent") or ""),
+        "raw": str(request.get("raw_log") or ""),
+        "normalized_request": str(preprocessed.get("normalized_uri") or ""),
+        "matched_rule_ids": rules.get("matched_ids") or [],
+        "matched_rules": rules.get("matched_rules") or [],
+        "embedding": record.get("embedding") or [],
+        "ml_label": ml.get("label"),
+        "ml_should_alert": ml.get("should_alert"),
+        "should_alert": scoring.get("should_alert"),
+        "ml_attack_type": ml.get("attack_type"),
+        "rule_score": rules.get("score"),
+        "detection_method": scoring.get("detection_method") or "hybrid",
         "detection_sources": _extract_detection_sources(record),
-        "primary_signal": str(record.get("primary_signal") or "unknown"),
-        "risk_input_scores": record.get("risk_input_scores") or {},
+        "primary_signal": str(scoring.get("primary_signal") or "unknown"),
+        "risk_input_scores": scoring.get("risk_input_scores") or {},
     }
 
     if not isinstance(normalized["matched_rule_ids"], list):
@@ -1057,14 +1073,13 @@ class DashboardQueryAdapter:
     def _normalize_similar_request(row: Mapping[str, Any]) -> Dict[str, Any]:
         """Normalize a raw similar-log result row returned by find_similar_logs."""
         score = _safe_number(row.get("score"), 0.0)
-        # Scores from $vectorSearch are cosine similarities in [0, 1].
         similarity_score = max(0.0, min(1.0, score))
         return {
             "event_id": str(row.get("event_id") or ""),
-            "timestamp": _timestamp_to_text(_first_non_empty(row, "timestamp", "time", "@timestamp")),
-            "ip": str(_first_non_empty(row, "source_ip", "ip", "client_ip") or "Unknown"),
-            "uri": str(_first_non_empty(row, "uri", "original_url", "url") or "-"),
-            "risk_score": _safe_int(_first_non_empty(row, "risk_score", "rule_score"), 0),
+            "timestamp": _timestamp_to_text(row.get("timestamp")),
+            "ip": str(row.get("source_ip") or "Unknown"),
+            "uri": str(row.get("uri") or "-"),
+            "risk_score": _safe_int(row.get("risk_score"), 0),
             "risk_level": str(row.get("risk_level") or ""),
             "final_label": str(row.get("final_label") or ""),
             "similarity_score": round(similarity_score, 4),
@@ -1598,6 +1613,8 @@ class DashboardQueryAdapter:
                 }
             )
 
+        from src.schemas.mongodb_schema import flat_to_nested
+        requests = [flat_to_nested(row) for row in requests]
         incidents = [row for row in requests if _is_malicious_record(row)]
 
         attack_patterns = [

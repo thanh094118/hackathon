@@ -118,6 +118,10 @@ class MongoDBExporter:
                     if parsed_ts:
                         doc["timestamp"] = parsed_ts
                 
+                # Support schema version 2 nesting
+                from src.schemas.mongodb_schema import flat_to_nested
+                doc = flat_to_nested(doc)
+
                 # Update document matched by event_id, insert if it does not exist (upsert=True)
                 operations.append(
                     UpdateOne({"event_id": event_id}, {"$set": doc}, upsert=True)

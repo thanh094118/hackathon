@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import types
 
 from src.dashboard.query_adapter import DashboardQueryAdapter
 import src.dashboard.query_adapter as query_adapter_module
+
 
 
 def _force_mongodb_mode(adapter: DashboardQueryAdapter) -> None:
@@ -32,6 +35,7 @@ def test_dashboard_query_adapter_mock_mode(monkeypatch):
 def test_dashboard_query_adapter_falls_back_when_mongodb_uri_missing(monkeypatch):
     monkeypatch.delenv("DASHBOARD_USE_MOCK", raising=False)
     monkeypatch.delenv("MONGODB_URI", raising=False)
+    monkeypatch.setattr(query_adapter_module, "load_dotenv", lambda: None)
 
     adapter = DashboardQueryAdapter()
     status = adapter.status()
@@ -119,7 +123,7 @@ def test_get_attack_timeline_delegates_to_central_query_module(monkeypatch):
 
     assert called["db"] is adapter.db
     assert called["hours_bucket"] == 1
-    assert rows == [{"timestamp": "2026-01-01T00:00:00+00:00", "count": 4}]
+    assert rows == [{"timestamp": "2026-01-01T00:00:00+00:00", "attack_type": "Unknown", "count": 4}]
 """Tests for DashboardQueryAdapter.find_similar_requests (Issue 1).
 
 Coverage:
@@ -131,9 +135,9 @@ Coverage:
 - Normalizes similarity_score from the $vectorSearch score field.
 """
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
+
+
 
 import pytest
 

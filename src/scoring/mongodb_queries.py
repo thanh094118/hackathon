@@ -25,13 +25,12 @@ def _safe_int(value: Any, default: int = 0) -> int:
 def _malicious_match_query() -> Dict[str, Any]:
     return {
         "$or": [
-            {"prediction.label": {"$in": ["malicious", "suspicious", "attack"]}},
-            {"ml_label": {"$in": ["malicious", "suspicious", "attack"]}},
-            {"ml_should_alert": True},
-            {"should_alert": True},
-            {"attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
-            {"ml_attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
-            {"risk_score": {"$gte": 70}},
+            {"detection.ml.label": {"$in": ["malicious", "suspicious", "attack"]}},
+            {"detection.ml.should_alert": True},
+            {"scoring.should_alert": True},
+            {"detection.rules.attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
+            {"detection.ml.attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
+            {"scoring.risk_score": {"$gte": 70}},
         ]
     }
 
@@ -209,17 +208,17 @@ def find_similar_logs(
                 "_id": 0,
                 "event_id": 1,
                 "timestamp": 1,
-                "source_ip": 1,
-                "http_method": 1,
-                "original_url": 1,
-                "uri": 1,
-                "query_string": 1,
-                "status_code": 1,
-                "user_agent": 1,
-                "risk_score": 1,
-                "risk_level": 1,
-                "final_label": 1,
-                "should_alert": 1,
+                "source_ip": "$request.source_ip",
+                "http_method": "$request.method",
+                "original_url": "$request.uri",
+                "uri": "$request.uri",
+                "query_string": "$request.query_string",
+                "status_code": "$request.status_code",
+                "user_agent": "$request.user_agent",
+                "risk_score": "$scoring.risk_score",
+                "risk_level": "$scoring.risk_level",
+                "final_label": "$scoring.final_label",
+                "should_alert": "$scoring.should_alert",
                 "score": {"$meta": "vectorSearchScore"}
             }
         }
@@ -239,23 +238,23 @@ def get_ip_threat_scores(collection, limit: int = 10) -> List[Dict[str, Any]]:
     pipeline = [
         {
             "$group": {
-                "_id": "$source_ip",
+                "_id": "$request.source_ip",
                 "total_requests": {"$sum": 1},
                 "total_alerts": {
                     "$sum": {
                         "$cond": [
                             {"$or": [
-                                {"$eq": ["$should_alert", True]},
-                                {"$in": ["$final_label", ["malicious", "suspicious"]]}
+                                {"$eq": ["$scoring.should_alert", True]},
+                                {"$in": ["$scoring.final_label", ["malicious", "suspicious"]]}
                             ]},
                             1,
                             0
                         ]
                     }
                 },
-                "max_risk_score": {"$max": "$risk_score"},
-                "avg_risk_score": {"$avg": "$risk_score"},
-                "triggered_rules": {"$addToSet": "$rule_id"}
+                "max_risk_score": {"$max": "$scoring.risk_score"},
+                "avg_risk_score": {"$avg": "$scoring.risk_score"},
+                "triggered_rules": {"$addToSet": "$detection.rules.matched_ids"}
             }
         },
         {
@@ -316,7 +315,12 @@ def get_attack_type_distribution(
         {"$match": match_query},
         {
             "$group": {
-                "_id": {"$ifNull": ["$attack_type", {"$ifNull": ["$ml_attack_type", "Unknown"]}]},
+                "_id": {
+                    "$ifNull": [
+                        "$detection.rules.attack_type",
+                        {"$ifNull": ["$detection.ml.attack_type", "Unknown"]}
+                    ]
+                },
                 "count": {"$sum": 1},
             }
         },
@@ -354,10 +358,10 @@ def get_top_attacking_ips(
         {"$match": match_query},
         {
             "$group": {
-                "_id": {"$ifNull": ["$source_ip", "$ip", "Unknown"]},
+                "_id": {"$ifNull": ["$request.source_ip", "Unknown"]},
                 "total_attacks": {"$sum": 1},
-                "attack_types": {"$addToSet": "$attack_type"},
-                "target_uris": {"$addToSet": "$uri"},
+                "attack_types": {"$addToSet": "$detection.rules.attack_type"},
+                "target_uris": {"$addToSet": "$request.uri"},
                 "first_seen": {"$min": "$timestamp"},
                 "last_seen": {"$max": "$timestamp"},
             }
@@ -402,10 +406,10 @@ def detect_attack_campaigns(
         {"$match": match_query},
         {
             "$group": {
-                "_id": {"$ifNull": ["$source_ip", "$ip", "Unknown"]},
+                "_id": {"$ifNull": ["$request.source_ip", "Unknown"]},
                 "total_attacks": {"$sum": 1},
-                "attack_types": {"$addToSet": "$attack_type"},
-                "target_uris": {"$addToSet": "$uri"},
+                "attack_types": {"$addToSet": "$detection.rules.attack_type"},
+                "target_uris": {"$addToSet": "$request.uri"},
                 "first_seen": {"$min": "$timestamp"},
                 "last_seen": {"$max": "$timestamp"},
             }
@@ -444,10 +448,7 @@ def get_ip_blast_radius(
         return []
 
     match_query = {
-        "$or": [
-            {"source_ip": str(ip)},
-            {"ip": str(ip)}
-        ]
+        "request.source_ip": str(ip)
     }
     max_limit = max(1, _safe_int(limit, 10))
 
@@ -455,7 +456,7 @@ def get_ip_blast_radius(
         {"$match": match_query},
         {
             "$group": {
-                "_id": {"$ifNull": ["$uri", "Unknown"]},
+                "_id": {"$ifNull": ["$request.uri", "Unknown"]},
                 "uri_count": {"$sum": 1}
             }
         },
@@ -519,10 +520,7 @@ def generate_attack_timeline(
 
     match_query: Dict[str, Any] = dict(_malicious_match_query())
     if ip:
-        match_query["$or"] = [
-            {"source_ip": str(ip)},
-            {"ip": str(ip)}
-        ]
+        match_query["request.source_ip"] = str(ip)
 
     if cutoff:
         match_query = {
@@ -549,7 +547,10 @@ def generate_attack_timeline(
                     }
                 },
                 "_attack_type": {
-                    "$ifNull": ["$attack_type", {"$ifNull": ["$ml_attack_type", "Unknown"]}]
+                    "$ifNull": [
+                        "$detection.rules.attack_type",
+                        {"$ifNull": ["$detection.ml.attack_type", "Unknown"]}
+                    ]
                 }
             }
         },
@@ -616,15 +617,15 @@ def get_threat_timeline(collection, interval: str = "hour") -> List[Dict[str, An
                     "$sum": {
                         "$cond": [
                             {"$or": [
-                                {"$eq": ["$should_alert", True]},
-                                {"$in": ["$final_label", ["malicious", "suspicious"]]}
+                                {"$eq": ["$scoring.should_alert", True]},
+                                {"$in": ["$scoring.final_label", ["malicious", "suspicious"]]}
                             ]},
                             1,
                             0
                         ]
                     }
                 },
-                "avg_risk_score": {"$avg": "$risk_score"}
+                "avg_risk_score": {"$avg": "$scoring.risk_score"}
             }
         },
         {

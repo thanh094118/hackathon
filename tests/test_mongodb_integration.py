@@ -68,9 +68,10 @@ def test_mongodb_exporter_bulk_upsert():
         op1 = calls[0]
         assert op1._filter == {"event_id": "evt1"}
         assert op1._doc["$set"]["event_id"] == "evt1"
-        assert op1._doc["$set"]["uri"] == "/index.php"
+        assert op1._doc["$set"]["request"]["uri"] == "/index.php"
         from datetime import datetime
         assert isinstance(op1._doc["$set"]["timestamp"], datetime)
+        assert op1._doc["$set"]["scoring"]["risk_score"] == 2.0
         assert op1._upsert is True
 
         # Check second update operation parameters
@@ -216,7 +217,7 @@ def test_get_ip_blast_radius():
     pipeline = mock_collection.aggregate.call_args[0][0]
     # Verify match stage on ip
     assert "$match" in pipeline[0]
-    assert "$or" in pipeline[0]["$match"]
+    assert pipeline[0]["$match"]["request.source_ip"] == "1.2.3.4"
 
 
 def test_generate_attack_timeline_multi_series():
