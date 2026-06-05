@@ -644,7 +644,7 @@ class DashboardQueryAdapter:
 
         high_severity = self._count_documents(
             self.incidents_collection_name,
-            self._combine_queries(tf_match, {"severity": {"$in": ["high", "critical", "HIGH", "CRITICAL"]}}),
+            self._combine_queries(tf_match, self._high_severity_match_query()),
         )
         if high_severity == 0:
             high_severity = self._count_documents(
@@ -654,12 +654,7 @@ class DashboardQueryAdapter:
                     {
                         "$and": [
                             self._malicious_match_query(),
-                            {
-                                "$or": [
-                                    {"severity": {"$in": ["high", "critical", "HIGH", "CRITICAL"]}},
-                                    {"risk_score": {"$gte": 80}},
-                                ]
-                            },
+                            self._high_severity_match_query(),
                         ]
                     }
                 ),
@@ -1543,6 +1538,12 @@ class DashboardQueryAdapter:
     def _malicious_match_query() -> Dict[str, Any]:
         return {
             "$or": [
+                {"detection.ml.label": {"$in": ["malicious", "suspicious", "attack"]}},
+                {"detection.ml.should_alert": True},
+                {"scoring.should_alert": True},
+                {"detection.rules.attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
+                {"detection.ml.attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
+                {"scoring.risk_score": {"$gte": 70}},
                 {"prediction.label": {"$in": ["malicious", "suspicious", "attack"]}},
                 {"ml_label": {"$in": ["malicious", "suspicious", "attack"]}},
                 {"ml_should_alert": True},
@@ -1550,6 +1551,17 @@ class DashboardQueryAdapter:
                 {"attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
                 {"ml_attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
                 {"risk_score": {"$gte": 70}},
+            ]
+        }
+
+    @staticmethod
+    def _high_severity_match_query() -> Dict[str, Any]:
+        return {
+            "$or": [
+                {"severity": {"$in": ["high", "critical", "HIGH", "CRITICAL"]}},
+                {"scoring.risk_level": {"$in": ["high", "critical", "HIGH", "CRITICAL"]}},
+                {"risk_score": {"$gte": 80}},
+                {"scoring.risk_score": {"$gte": 80}},
             ]
         }
 

@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 # Add project root to sys.path to allow importing from src
 root_dir = Path(__file__).resolve().parent.parent.parent
@@ -13,8 +16,11 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from src.scoring import mongodb_queries
 from src.dashboard.query_adapter import DashboardQueryAdapter
 from src.alerts.crypto import AlertSettingsCryptoError
+from src.alerts.dynamic_baseline import DynamicBaseline
+from src.alerts.fp_suppression import FPSuppressionEngine
 from src.alerts.models import AlertEvent
 from src.alerts.settings_store import AlertSettingsStore, public_settings_from_config
 from src.alerts.config import load_alert_config
@@ -41,6 +47,97 @@ def _alert_settings_store() -> AlertSettingsStore:
         raise HTTPException(status_code=503, detail="MongoDB is not connected")
     return AlertSettingsStore(query_engine.db)
 
+
+def _serialize_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _serialize_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_serialize_value(item) for item in value]
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
+
+
+def _serialize_document(document: Dict[str, Any]) -> Dict[str, Any]:
+    serialized = {key: _serialize_value(value) for key, value in document.items()}
+    if "_id" in serialized and not isinstance(serialized["_id"], (dict, list, str, int, float, bool, type(None))):
+        serialized["_id"] = str(serialized["_id"])
+    return serialized
+
+
+def _managed_incidents_collection():
+    if query_engine.db is None:
+        raise HTTPException(status_code=503, detail="MongoDB is not connected")
+    return query_engine.db["managed_incidents"]
+
+
+def _load_managed_incidents(limit: int = 100) -> List[Dict[str, Any]]:
+    collection = _managed_incidents_collection()
+    rows = list(collection.find())
+    rows.sort(
+        key=lambda row: str(
+            row.get("created_at")
+            or row.get("updated_at")
+            or row.get("cooldown_until")
+            or ""
+        ),
+        reverse=True,
+    )
+    return [_serialize_document(row) for row in rows[:limit]]
+
+
+def _baseline_snapshot(*, ensure_materialized: bool) -> Dict[str, Any]:
+    if query_engine.db is None:
+        raise HTTPException(status_code=503, detail="MongoDB is not connected")
+
+    baseline_collection = query_engine.db["attack_baselines"]
+    floor_collection = query_engine.db["endpoint_min_floors"]
+
+    baselines = list(baseline_collection.find())
+    endpoint_floors = list(floor_collection.find())
+
+    if ensure_materialized and (not baselines or not endpoint_floors):
+        engine = DynamicBaseline(query_engine.db)
+        engine.calculate_baselines()
+        engine.calculate_min_floors()
+        baselines = list(baseline_collection.find())
+        endpoint_floors = list(floor_collection.find())
+
+    baselines.sort(
+        key=lambda row: (
+            int((row.get("_id") or {}).get("hour_of_week", 9999))
+            if isinstance(row.get("_id"), dict)
+            else int(row.get("_id", 9999)),
+            str((row.get("_id") or {}).get("endpoint_group", "")) if isinstance(row.get("_id"), dict) else "",
+        )
+    )
+    endpoint_floors.sort(key=lambda row: str(row.get("_id") or ""))
+
+    comparison = mongodb_queries.get_baseline_comparison_last_24h(query_engine.db)
+    actual_last_24h = [
+        {
+            "_id": {"dayOfWeek": point["day_of_week"], "hour": point["hour"]},
+            "count": point["actual_count"],
+            "hour_of_week": point["hour_of_week"],
+            "timestamp": point["timestamp"],
+        }
+        for point in comparison
+    ]
+
+    return {
+        "baselines": [_serialize_document(row) for row in baselines],
+        "actual_last_24h": actual_last_24h,
+        "endpoint_floors": [
+            {
+                "endpoint_group": str(row.get("_id") or "unknown"),
+                "min_floor": int(float(row.get("min_floor", 0) or 0)),
+            }
+            for row in endpoint_floors
+        ],
+        "comparison_last_24h": comparison,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
 # Serve static files path
 STATIC_DIR = Path(__file__).parent / "static"
 STATIC_DIR.mkdir(exist_ok=True)
@@ -64,7 +161,7 @@ def save_alert_settings(payload: dict):
         raise HTTPException(status_code=503, detail=f"{exc}. Generate a valid key with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"") from exc
 
 @app.post("/api/settings/alerts/test")
-def test_alert_settings(payload: dict | None = None):
+def test_alert_settings(payload: Optional[Dict[str, Any]] = None):
     store = _alert_settings_store()
     config = store.load_config()
     if config is None:
@@ -122,6 +219,15 @@ def get_materialized_campaigns(limit: int = Query(50, ge=1)):
 def get_incidents(limit: int = Query(100, ge=1), method: str = "All", timeframe: Optional[str] = Query(None)):
     return query_engine.get_recent_incidents(limit=limit, method_filter=method, timeframe=timeframe)
 
+@app.get("/api/incidents/managed")
+def get_managed_incidents(limit: int = Query(100, ge=1)):
+    try:
+        return _load_managed_incidents(limit=limit)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/incidents/{incident_id}")
 def get_incident(incident_id: str):
     detail = query_engine.get_incident_detail(incident_id)
@@ -156,114 +262,57 @@ def get_similar_incidents(incident_id: str, limit: int = Query(5, ge=1)):
     
     return query_engine.find_similar_requests(embedding, limit=limit)
 
-@app.get("/api/incidents/managed")
-def get_managed_incidents(limit: int = Query(100, ge=1)):
-    if query_engine.db is None:
-        raise HTTPException(status_code=503, detail="MongoDB is not connected")
-    try:
-        coll = query_engine.db["managed_incidents"]
-        cursor = coll.find().sort("created_at", -1).limit(limit)
-        results = list(cursor)
-        for doc in results:
-            doc["_id"] = str(doc["_id"])
-            if "created_at" in doc and hasattr(doc["created_at"], "isoformat"):
-                doc["created_at"] = doc["created_at"].isoformat()
-            if "updated_at" in doc and hasattr(doc["updated_at"], "isoformat"):
-                doc["updated_at"] = doc["updated_at"].isoformat()
-            if "cooldown_until" in doc and hasattr(doc["cooldown_until"], "isoformat"):
-                doc["cooldown_until"] = doc["cooldown_until"].isoformat()
-        return results
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/incidents/{incident_id}/false-positive")
-def mark_incident_false_positive(incident_id: str, payload: dict | None = None):
+def mark_incident_false_positive(incident_id: str, payload: Optional[Dict[str, Any]] = None):
     if query_engine.db is None:
         raise HTTPException(status_code=503, detail="MongoDB is not connected")
     notes = ""
     if payload:
         notes = payload.get("notes") or ""
-    
-    from src.alerts.fp_suppression import FPSuppressionEngine
+
     engine = FPSuppressionEngine(query_engine.db)
     success = engine.mark_false_positive(incident_id, notes)
     if not success:
         raise HTTPException(status_code=400, detail=f"Failed to mark incident {incident_id} as false positive")
-    return {"status": "success", "message": f"Incident {incident_id} successfully marked as false positive"}
+    return {
+        "status": "success",
+        "incident_id": incident_id,
+        "resolution": "false_positive",
+        "notes": notes,
+        "message": f"Incident {incident_id} successfully marked as false positive",
+    }
 
 
 @app.get("/api/baseline/status")
 def get_baseline_status():
+    try:
+        return _baseline_snapshot(ensure_materialized=True)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/baseline/recalculate")
+def recalculate_baseline_status():
     if query_engine.db is None:
         raise HTTPException(status_code=503, detail="MongoDB is not connected")
     try:
-        coll = query_engine.db["attack_baselines"]
-        baselines = list(coll.find())
-        for b in baselines:
-            b["_id"] = int(b["_id"])
-        
-        if not baselines:
-            from src.alerts.dynamic_baseline import DynamicBaseline
-            engine = DynamicBaseline(query_engine.db)
-            engine.calculate_baselines()
-            baselines = list(coll.find())
-            for b in baselines:
-                b["_id"] = int(b["_id"])
-
-        from datetime import datetime, timezone, timedelta
-        now = datetime.now(timezone.utc)
-        coll_req = query_engine.db["requests"]
-        pipeline = [
-            {
-                "$match": {
-                    "$or": [
-                        {"scoring.should_alert": True},
-                        {"scoring.final_label": {"$in": ["malicious", "suspicious"]}},
-                    ]
-                }
-            },
-            {
-                "$addFields": {
-                    "date_obj": {
-                        "$cond": {
-                            "if": {"$eq": [{"$type": "$timestamp"}, "date"]},
-                            "then": "$timestamp",
-                            "else": {
-                                "$dateFromString": {
-                                    "dateString": "$timestamp",
-                                    "onError": None,
-                                    "onNull": None,
-                                }
-                            },
-                        }
-                    }
-                }
-            },
-            {"$match": {"date_obj": {"$gte": now - timedelta(hours=24)}}},
-            {
-                "$project": {
-                    "hour": {"$hour": "$date_obj"},
-                    "dayOfWeek": {"$dayOfWeek": "$date_obj"}
-                }
-            },
-            {
-                "$group": {
-                    "_id": {"dayOfWeek": "$dayOfWeek", "hour": "$hour"},
-                    "count": {"$sum": 1}
-                }
-            }
-        ]
-        actual_hourly = list(coll_req.aggregate(pipeline))
-        for act in actual_hourly:
-            day = act["_id"]["dayOfWeek"] - 1
-            hour = act["_id"]["hour"]
-            act["hour_of_week"] = day * 24 + hour
-        
-        return {
-            "baselines": baselines,
-            "actual_last_24h": actual_hourly
-        }
+        engine = DynamicBaseline(query_engine.db)
+        baseline_calculation = engine.calculate_baselines()
+        min_floor_calculation = engine.calculate_min_floors()
+        if baseline_calculation.get("status") == "error" or min_floor_calculation.get("status") == "error":
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to recalculate dynamic baselines or endpoint floors",
+            )
+        payload = _baseline_snapshot(ensure_materialized=False)
+        payload["baseline_calculation"] = baseline_calculation
+        payload["min_floor_calculation"] = min_floor_calculation
+        return payload
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -278,4 +327,3 @@ def read_index():
 
 # Serve all other static assets if any
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
