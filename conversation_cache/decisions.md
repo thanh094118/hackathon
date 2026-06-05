@@ -67,3 +67,11 @@
   - **Endpoint-Group Specific Baselines & Min Floors**: URIs are categorized into `sensitive`, `api`, `default`, and `root` groups. Aggregation calculates floors per group using a 90th percentile of traffic scaled by 10% (min 2). Falls back in memory to `sensitive`: 2, `api`: 20, `root`: 100.
   - **Smokescreen Protection (Contextual Risk Separation)**: The risk score and severity of an incident or merged incident are calculated solely on the subset of requests targeting the most sensitive endpoint group present (e.g. `sensitive` requests take priority over `root`), preventing attackers from masking malicious activities with high-volume low-priority noise.
 
+- Static dashboard exposure rules for stateful alerting and baselines (2026-06-05):
+  - `Correlated Incidents` in the static dashboard read exclusively from `GET /api/incidents/managed`; no separate managed-incident detail endpoint is introduced.
+  - The investigator UI shows all managed incident statuses (`cooldown/open` and resolved/suppressed) for SOC transparency.
+  - `Mark as False Positive` is exposed only for managed/correlated incidents in v1, not raw alerts.
+  - `Baseline Analytics` is a fixed last-24-hours view and intentionally does not reuse the global timeframe selector.
+  - Baseline charting is aggregated across endpoint groups by summing `mean + 3*std_dev` thresholds per hour-of-week bucket; endpoint-specific visibility remains in the floor table.
+  - Specific static routes under `/api/incidents/*` must be declared before dynamic `/api/incidents/{incident_id}` routes in FastAPI to avoid shadowing fixed endpoints like `/api/incidents/managed`.
+- Dashboard overview summary queries must treat nested Schema V2 fields under `detection.*` and `scoring.*` as the primary source of truth for malicious/high-severity counts; flat legacy fields are fallback compatibility only.

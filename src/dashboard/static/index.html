@@ -219,6 +219,12 @@
                 </a>
             </li>
             <li>
+                <a id="nav-baseline" href="#baseline" class="flex items-center gap-3 px-4 py-3 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all duration-200 cursor-pointer border-l-4 border-transparent">
+                    <span class="material-symbols-outlined">monitoring</span>
+                    <span class="font-label-caps text-label-caps">Baseline Analytics</span>
+                </a>
+            </li>
+            <li>
                 <a id="nav-settings" href="#settings" class="flex items-center gap-3 px-4 py-3 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all duration-200 cursor-pointer border-l-4 border-transparent">
                     <span class="material-symbols-outlined">settings</span>
                     <span class="font-label-caps text-label-caps">Settings</span>
@@ -490,9 +496,11 @@
                             Incident Feed
                             <span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary text-lg">filter_list</span>
                         </h2>
-                        <div class="flex gap-1 overflow-x-auto pb-1 no-scrollbar">
-                            <button id="feed-filter-all" onclick="setFeedFilter('All')" class="px-3 py-1 rounded-full bg-primary/20 text-primary border border-primary/30 font-label-caps text-[10px] whitespace-nowrap">Hybrid Risk</button>
+                        <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                            <button id="feed-mode-managed" onclick="setInvestigatorMode('managed')" class="px-3 py-1 rounded-full bg-primary/20 text-primary border border-primary/30 font-label-caps text-[10px] whitespace-nowrap">Correlated Incidents</button>
+                            <button id="feed-mode-raw" onclick="setInvestigatorMode('raw')" class="px-3 py-1 rounded-full bg-surface-variant text-on-surface-variant border border-outline-variant/30 font-label-caps text-[10px] whitespace-nowrap hover:bg-surface-container-high">Raw Security Alerts</button>
                         </div>
+                        <p id="incident-feed-caption" class="font-data-mono text-[10px] text-on-surface-variant mt-3">Stateful incidents grouped by behavior, cooldown, and evidence trail.</p>
                     </div>
                     <!-- Incident list container -->
                     <div id="incident-feed-list" class="flex-1 overflow-y-auto p-3 space-y-3">
@@ -510,7 +518,7 @@
                         <div class="flex flex-col xl:flex-row xl:items-end justify-between border-b border-outline-variant/30 pb-6 gap-4">
                             <div class="animate-pulse-error">
                                 <div class="flex items-center gap-3 mb-2">
-                                    <span class="material-symbols-outlined text-error text-3xl glow-error">warning</span>
+                                    <span id="detail-title-icon" class="material-symbols-outlined text-error text-3xl glow-error">warning</span>
                                     <h2 id="detail-title" class="font-display-lg text-xl xl:text-2xl text-error neon-text-error">MALICIOUS // THREAT DETECTED</h2>
                                 </div>
                                 <p id="detail-meta-header" class="font-data-mono text-xs text-on-surface-variant ml-11">INCIDENT ID: N/A | CLASSIFIED VIA HYBRID RISK</p>
@@ -533,22 +541,30 @@
                         <!-- Bento Grid Layout for Details -->
                         <div class="grid grid-cols-12 gap-gutter">
                             <!-- Metadata Grid (Span 7) -->
-                            <div class="col-span-12 lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-unit">
+                            <div class="col-span-12 lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-unit">
                                 <div class="glass-panel bg-surface-container-low p-4 flex flex-col justify-center">
-                                    <span class="font-label-caps text-[10px] text-outline mb-1">EVENT ID</span>
+                                    <span id="detail-event-id-label" class="font-label-caps text-[10px] text-outline mb-1">EVENT ID</span>
                                     <span id="detail-event-id" class="font-data-mono text-xs text-on-surface truncate">N/A</span>
                                 </div>
                                 <div class="glass-panel bg-surface-container-low p-4 flex flex-col justify-center">
-                                    <span class="font-label-caps text-[10px] text-outline mb-1">TIMESTAMP</span>
+                                    <span id="detail-timestamp-label" class="font-label-caps text-[10px] text-outline mb-1">TIMESTAMP</span>
                                     <span id="detail-timestamp" class="font-data-mono text-xs text-on-surface">N/A</span>
                                 </div>
                                 <div class="glass-panel bg-surface-container-low p-4 flex flex-col justify-center">
-                                    <span class="font-label-caps text-[10px] text-outline mb-1">SOURCE IP / ATTACKS</span>
+                                    <span id="detail-ip-label" class="font-label-caps text-[10px] text-outline mb-1">SOURCE IP / ATTACKS</span>
                                     <span id="detail-ip" class="font-data-mono text-xs text-primary flex items-center gap-2">N/A</span>
                                 </div>
                                 <div class="glass-panel bg-surface-container-low p-4 flex flex-col justify-center">
-                                    <span class="font-label-caps text-[10px] text-outline mb-1">METHOD &amp; PATH</span>
+                                    <span id="detail-method-path-label" class="font-label-caps text-[10px] text-outline mb-1">METHOD &amp; PATH</span>
                                     <span id="detail-method-path" class="font-data-mono text-xs text-on-surface truncate">N/A</span>
+                                </div>
+                                <div class="glass-panel bg-surface-container-low p-4 flex flex-col justify-center">
+                                    <span id="detail-state-label" class="font-label-caps text-[10px] text-outline mb-1">STATE / COOLDOWN</span>
+                                    <span id="detail-state" class="font-data-mono text-xs text-on-surface truncate">N/A</span>
+                                </div>
+                                <div class="glass-panel bg-surface-container-low p-4 flex flex-col justify-center">
+                                    <span id="detail-evidence-label" class="font-label-caps text-[10px] text-outline mb-1">EVIDENCE / TARGETS</span>
+                                    <span id="detail-evidence" class="font-data-mono text-xs text-on-surface truncate">N/A</span>
                                 </div>
                             </div>
 
@@ -559,7 +575,7 @@
                                 </div>
                                 <div class="flex items-center gap-2 mb-3 relative z-10">
                                     <span class="material-symbols-outlined text-secondary">auto_awesome</span>
-                                    <h3 class="font-headline-md text-base text-secondary">AI Vector Analysis</h3>
+                                    <h3 id="detail-analysis-title" class="font-headline-md text-base text-secondary">AI Vector Analysis</h3>
                                 </div>
                                 <p id="detail-ai-desc" class="font-body-md text-xs text-on-surface-variant mb-4 relative z-10 leading-relaxed">
                                     No vector analysis matches available. Run the machine learning pipeline to enable embeddings comparison.
@@ -585,7 +601,7 @@
                                 <div class="bg-surface-container-low px-4 py-2 border-b border-outline-variant/20 flex justify-between items-center cursor-pointer" onclick="toggleRawPayload()">
                                     <div class="flex items-center gap-2">
                                         <span class="material-symbols-outlined text-outline text-sm">code</span>
-                                        <span class="font-label-caps text-[10px] text-on-surface">RAW LOG / REQUEST DATA</span>
+                                        <span id="detail-raw-heading" class="font-label-caps text-[10px] text-on-surface">RAW LOG / REQUEST DATA</span>
                                     </div>
                                     <span id="raw-payload-arrow" class="material-symbols-outlined text-outline text-sm">expand_less</span>
                                 </div>
@@ -595,7 +611,7 @@
                             </div>
 
                             <!-- Historical Similarity Logs -->
-                            <div class="col-span-12 glass-panel bg-surface-container-lowest border border-outline-variant/20 rounded-lg overflow-hidden flex flex-col">
+                            <div id="similar-incidents-section" class="col-span-12 glass-panel bg-surface-container-lowest border border-outline-variant/20 rounded-lg overflow-hidden flex flex-col">
                                 <div class="bg-surface-container-low px-4 py-3 border-b border-outline-variant/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                                     <div class="flex items-center gap-2">
                                         <span class="material-symbols-outlined text-outline text-sm">manage_search</span>
@@ -634,10 +650,16 @@
                                         <li>Initiate automated incident playbook.</li>
                                     </ul>
                                 </div>
-                                <button onclick="applyResponse()" class="bg-error text-on-error font-label-caps text-xs px-5 py-2.5 rounded hover:bg-error-container hover:text-on-error-container transition-colors shadow-[0_0_15px_rgba(255,180,171,0.2)] whitespace-nowrap flex items-center gap-2 active:scale-95">
-                                    <span class="material-symbols-outlined text-sm">block</span>
-                                    APPLY RECOMMENDED RESPONSE
-                                </button>
+                                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                                    <button id="btn-mark-false-positive" onclick="markCurrentIncidentFalsePositive()" class="hidden bg-tertiary-container/20 text-tertiary border border-tertiary-container/40 font-label-caps text-xs px-5 py-2.5 rounded hover:bg-tertiary-container/30 transition-colors whitespace-nowrap flex items-center gap-2 active:scale-95">
+                                        <span class="material-symbols-outlined text-sm">rule</span>
+                                        MARK AS FALSE POSITIVE
+                                    </button>
+                                    <button onclick="applyResponse()" class="bg-error text-on-error font-label-caps text-xs px-5 py-2.5 rounded hover:bg-error-container hover:text-on-error-container transition-colors shadow-[0_0_15px_rgba(255,180,171,0.2)] whitespace-nowrap flex items-center gap-2 active:scale-95">
+                                        <span class="material-symbols-outlined text-sm">block</span>
+                                        APPLY RECOMMENDED RESPONSE
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -653,7 +675,80 @@
                 </section>
             </div>
 
-            <!-- VIEW 3: SETTINGS -->
+            <!-- VIEW 3: BASELINE ANALYTICS -->
+            <div id="view-baseline-container" class="hidden space-y-6">
+                <div class="glass-panel-heavy bg-surface-container-lowest/60 p-6 rounded-lg flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                    <div>
+                        <h2 class="font-headline-md text-xl text-on-surface flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary">monitoring</span>
+                            Dynamic Baseline Comparison
+                        </h2>
+                        <p class="font-body-md text-xs text-on-surface-variant mt-2 max-w-2xl">
+                            Baseline collections are created lazily in MongoDB Atlas. The first successful baseline run will materialize `attack_baselines` and `endpoint_min_floors`.
+                        </p>
+                        <p id="baseline-generated-at" class="font-data-mono text-[11px] text-on-surface-variant mt-3">Waiting for baseline snapshot...</p>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <button onclick="recalculateBaselines()" class="bg-primary text-on-primary font-label-caps text-xs px-4 py-2 rounded hover:bg-primary-fixed-dim transition-colors flex items-center gap-2 active:scale-95">
+                            <span class="material-symbols-outlined text-sm">replay</span>
+                            RECALCULATE
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-gutter">
+                    <div class="xl:col-span-2 glass-panel-heavy bg-surface-container-lowest/60 p-6 rounded-lg flex flex-col h-[420px]">
+                        <div class="flex justify-between items-center mb-6 shrink-0">
+                            <div>
+                                <h3 class="font-headline-md text-lg font-semibold text-on-surface">Actual Alerts vs Baseline Threshold</h3>
+                                <p class="font-body-md text-xs text-on-surface-variant mt-1">Fixed 24-hour window using aggregated threshold `mean + 3 sigma`.</p>
+                            </div>
+                            <div class="flex gap-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-3 h-3 rounded-full bg-error"></span>
+                                    <span class="font-label-caps text-[10px] text-on-surface-variant">Actual Alerts</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="w-3 h-3 rounded-full bg-primary"></span>
+                                    <span class="font-label-caps text-[10px] text-on-surface-variant">Threshold</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex-1 relative w-full h-full min-h-0">
+                            <canvas id="baselineComparisonChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel-heavy bg-surface-container-lowest/60 p-6 rounded-lg flex flex-col min-h-[420px]">
+                        <div class="flex justify-between items-center mb-4 shrink-0">
+                            <div>
+                                <h3 class="font-headline-md text-lg font-semibold text-on-surface">Endpoint Minimum Floors</h3>
+                                <p class="font-body-md text-xs text-on-surface-variant mt-1">Hard floors that prevent low-volume noise from triggering alerts.</p>
+                            </div>
+                        </div>
+                        <div class="mb-4 glass-panel bg-surface-container-low/40 rounded-lg p-3">
+                            <p id="baseline-status-note" class="font-data-mono text-[11px] text-on-surface-variant">Loading baseline analytics from backend...</p>
+                        </div>
+                        <div class="flex-1 overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-outline-variant/20 bg-surface-container-low/50">
+                                        <th class="py-2 px-3 font-label-caps text-[11px] text-on-surface-variant font-normal">ENDPOINT GROUP</th>
+                                        <th class="py-2 px-3 font-label-caps text-[11px] text-on-surface-variant font-normal text-right">MIN FLOOR</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="endpoint-floors-tbody" class="font-data-mono text-xs">
+                                    <tr>
+                                        <td colspan="2" class="py-8 text-center text-outline">Waiting for endpoint floor data...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 4: SETTINGS -->
             <div id="view-settings-container" class="hidden space-y-6 max-w-5xl">
                 <div class="glass-panel bg-surface-container-lowest/50 border border-outline-variant/20 rounded-lg p-6">
                     <div class="flex items-center justify-between gap-4 mb-6">
@@ -749,10 +844,17 @@
         let timelineChart = null;
         let attackTypeChart = null;
         let blastRadiusChart = null;
-        
-        let currentFilter = "All";
+        let baselineComparisonChart = null;
+
         let activeIncidentId = null;
-        let cachedIncidents = [];
+        let activeIncidentSource = "managed";
+        let activeIncidentDetail = null;
+        let currentInvestigatorMode = "managed";
+        let cachedRawIncidents = [];
+        let cachedManagedIncidents = [];
+        let pendingIncidentIp = null;
+        let managedFeedError = null;
+        let rawFeedError = null;
         let campaignTimeout = null;
 
         // Live Clock
@@ -802,16 +904,18 @@
             const hash = window.location.hash || "#overview";
             const navOverview = document.getElementById("nav-overview");
             const navInvestigator = document.getElementById("nav-investigator");
+            const navBaseline = document.getElementById("nav-baseline");
             const navSettings = document.getElementById("nav-settings");
             const viewTitle = document.getElementById("view-title");
             const timeframeContainer = document.getElementById("timeframe-select-container");
 
             const overviewContainer = document.getElementById("view-overview-container");
             const investigatorContainer = document.getElementById("view-investigator-container");
+            const baselineContainer = document.getElementById("view-baseline-container");
             const settingsContainer = document.getElementById("view-settings-container");
 
             // Reset navigation links active class
-            [navOverview, navInvestigator, navSettings].forEach(el => {
+            [navOverview, navInvestigator, navBaseline, navSettings].forEach(el => {
                 el.className = "flex items-center gap-3 px-4 py-3 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all duration-200 cursor-pointer border-l-4 border-transparent";
                 const span = el.querySelector("span");
                 if (span) span.style.fontVariationSettings = "'FILL' 0";
@@ -827,6 +931,7 @@
 
                 overviewContainer.classList.remove("hidden");
                 investigatorContainer.classList.add("hidden");
+                baselineContainer.classList.add("hidden");
                 settingsContainer.classList.add("hidden");
 
                 // Initialize/render overview charts
@@ -841,10 +946,25 @@
 
                 overviewContainer.classList.add("hidden");
                 investigatorContainer.classList.remove("hidden");
+                baselineContainer.classList.add("hidden");
                 settingsContainer.classList.add("hidden");
 
                 // Load investigator list
                 loadIncidentFeed();
+            } else if (hash === "#baseline") {
+                navBaseline.className = "flex items-center gap-3 px-4 py-3 rounded text-primary bg-primary/10 border-l-4 border-primary transition-all duration-200 cursor-pointer";
+                const span = navBaseline.querySelector("span");
+                if (span) span.style.fontVariationSettings = "'FILL' 1";
+
+                viewTitle.textContent = "Baseline Analytics";
+                timeframeContainer.style.display = "none";
+
+                overviewContainer.classList.add("hidden");
+                investigatorContainer.classList.add("hidden");
+                baselineContainer.classList.remove("hidden");
+                settingsContainer.classList.add("hidden");
+
+                loadBaselineAnalytics();
             } else if (hash === "#settings") {
                 navSettings.className = "flex items-center gap-3 px-4 py-3 rounded text-primary bg-primary/10 border-l-4 border-primary transition-all duration-200 cursor-pointer";
                 const span = navSettings.querySelector("span");
@@ -855,6 +975,7 @@
 
                 overviewContainer.classList.add("hidden");
                 investigatorContainer.classList.add("hidden");
+                baselineContainer.classList.add("hidden");
                 settingsContainer.classList.remove("hidden");
 
                 loadAlertSettings();
@@ -899,6 +1020,8 @@
             await loadConnectionStatus();
             if (window.location.hash === "#investigator") {
                 await loadIncidentFeed();
+            } else if (window.location.hash === "#baseline") {
+                await loadBaselineAnalytics();
             } else if (window.location.hash === "#settings") {
                 await loadAlertSettings();
             } else {
@@ -1082,6 +1205,155 @@
                 connTitle.textContent = "API Unreachable";
                 connDesc.textContent = "Check backend daemon running on port 8501";
                 headerDb.textContent = "API DOWN";
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value == null ? "" : value)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
+        }
+
+        function formatTimestamp(value) {
+            if (!value) return "N/A";
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return String(value);
+            return date.toISOString().replace("T", " ").substring(0, 19) + " UTC";
+        }
+
+        function formatTimeOnly(value) {
+            if (!value) return "Unknown";
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return String(value).substring(11, 19) || String(value);
+            return date.toISOString().substring(11, 19) + " UTC";
+        }
+
+        function renderBaselineChart(points) {
+            const canvas = document.getElementById("baselineComparisonChart");
+            if (!canvas) return;
+            const ctx = canvas.getContext("2d");
+            if (baselineComparisonChart) {
+                baselineComparisonChart.destroy();
+            }
+
+            const labels = points.map(point => point.label || "--:--");
+            const actualCounts = points.map(point => Number(point.actual_count || 0));
+            const thresholds = points.map(point => Number(point.threshold || 0));
+
+            baselineComparisonChart = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: "Actual Alerts",
+                            data: actualCounts,
+                            borderColor: "#ffb4ab",
+                            backgroundColor: "rgba(255, 180, 171, 0.14)",
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.35,
+                            pointRadius: 3,
+                            pointHoverRadius: 5,
+                        },
+                        {
+                            label: "Baseline Threshold",
+                            data: thresholds,
+                            borderColor: "#8ed5ff",
+                            backgroundColor: "rgba(142, 213, 255, 0.08)",
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.35,
+                            pointRadius: 2,
+                            pointHoverRadius: 4,
+                            borderDash: [6, 4],
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: "index",
+                            intersect: false,
+                            backgroundColor: "rgba(21, 27, 45, 0.9)",
+                            titleColor: "#dce1fb",
+                            bodyColor: "#bdc8d1",
+                            borderColor: "rgba(62, 72, 79, 0.5)",
+                            borderWidth: 1,
+                            padding: 12
+                        }
+                    },
+                    interaction: {
+                        mode: "nearest",
+                        axis: "x",
+                        intersect: false
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: "rgba(62, 72, 79, 0.1)", drawBorder: false },
+                            ticks: { font: { size: 9 } }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: "rgba(62, 72, 79, 0.1)", drawBorder: false },
+                            ticks: { font: { size: 9 }, maxTicksLimit: 6 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderBaselineSnapshot(payload) {
+            const generatedAt = document.getElementById("baseline-generated-at");
+            const statusNote = document.getElementById("baseline-status-note");
+            const floorsTbody = document.getElementById("endpoint-floors-tbody");
+            const comparison = payload.comparison_last_24h || [];
+            const floors = payload.endpoint_floors || [];
+
+            generatedAt.textContent = `Snapshot generated: ${formatTimestamp(payload.generated_at)}`;
+            statusNote.textContent = `${comparison.length} hourly points loaded | ${floors.length} endpoint floors materialized`;
+
+            if (!floors.length) {
+                floorsTbody.innerHTML = `<tr><td colspan="2" class="py-8 text-center text-outline">No endpoint floors are materialized yet.</td></tr>`;
+            } else {
+                floorsTbody.innerHTML = floors.map(row => `
+                    <tr class="border-b border-outline-variant/10 hover:bg-surface-container-low/30 transition-colors">
+                        <td class="py-2.5 px-3 text-on-surface uppercase">${escapeHtml(row.endpoint_group || "unknown")}</td>
+                        <td class="py-2.5 px-3 text-right text-primary font-bold">${Number(row.min_floor || 0).toLocaleString()}</td>
+                    </tr>
+                `).join("");
+            }
+
+            renderBaselineChart(comparison);
+        }
+
+        async function loadBaselineAnalytics() {
+            try {
+                const payload = await fetchAPI("/api/baseline/status");
+                renderBaselineSnapshot(payload);
+            } catch (error) {
+                console.error("Failed to load baseline analytics:", error);
+                document.getElementById("baseline-generated-at").textContent = "Baseline snapshot unavailable.";
+                document.getElementById("baseline-status-note").textContent = "Failed to load baseline analytics from backend.";
+                document.getElementById("endpoint-floors-tbody").innerHTML = `<tr><td colspan="2" class="py-8 text-center text-error">Unable to retrieve endpoint floors.</td></tr>`;
+                showToast("Baseline Error", error.message || "Unable to load baseline analytics.", "error", "error");
+            }
+        }
+
+        async function recalculateBaselines() {
+            try {
+                const response = await fetch("/api/baseline/recalculate", {method: "POST"});
+                if (!response.ok) throw new Error(await extractAPIError(response));
+                const payload = await response.json();
+                renderBaselineSnapshot(payload);
+                showToast("Baselines Recalculated", "Dynamic thresholds and endpoint floors have been refreshed.", "monitoring", "success");
+            } catch (error) {
+                console.error("Failed to recalculate baselines:", error);
+                showToast("Baseline Error", error.message || "Unable to recalculate baselines.", "error", "error");
             }
         }
 
@@ -1552,201 +1824,443 @@
 
         // --- INVESTIGATOR WORKSPACE LOGIC ---
 
-        function setFeedFilter(filter) {
-            currentFilter = filter;
-            
-            // Toggle active classes on buttons
-            ["all"].forEach(id => {
-                const btn = document.getElementById(`feed-filter-${id}`);
-                btn.className = "px-3 py-1 rounded-full bg-surface-variant text-on-surface-variant border border-outline-variant/30 font-label-caps text-[10px] whitespace-nowrap hover:bg-surface-container-high";
-            });
-
-            const activeBtnMap = {
-                "All": "feed-filter-all"
-            };
-            
-            const activeBtn = document.getElementById(activeBtnMap[filter]);
-            if (activeBtn) {
-                activeBtn.className = "px-3 py-1 rounded-full bg-primary/20 text-primary border border-primary/30 font-label-caps text-[10px] whitespace-nowrap";
+        function getIncidentTone(score, suppressed = false) {
+            if (suppressed) {
+                return {
+                    borderColor: "border-l-2 border-l-tertiary-container",
+                    textClass: "text-tertiary-container",
+                    titleClass: "font-display-lg text-xl xl:text-2xl text-tertiary-container",
+                    badgeClass: "font-headline-md text-lg text-tertiary-container uppercase font-bold",
+                    iconClass: "material-symbols-outlined text-tertiary-container text-3xl",
+                };
             }
+            if (score >= 90) {
+                return {
+                    borderColor: "border-l-2 border-l-error",
+                    textClass: "text-error",
+                    titleClass: "font-display-lg text-xl xl:text-2xl text-error neon-text-error",
+                    badgeClass: "font-headline-md text-lg text-error uppercase font-bold",
+                    iconClass: "material-symbols-outlined text-error text-3xl glow-error",
+                };
+            }
+            if (score >= 70) {
+                return {
+                    borderColor: "border-l-2 border-l-secondary",
+                    textClass: "text-secondary",
+                    titleClass: "font-display-lg text-xl xl:text-2xl text-secondary",
+                    badgeClass: "font-headline-md text-lg text-secondary uppercase font-bold",
+                    iconClass: "material-symbols-outlined text-secondary text-3xl",
+                };
+            }
+            return {
+                borderColor: "border-l-2 border-l-primary",
+                textClass: "text-primary",
+                titleClass: "font-display-lg text-xl xl:text-2xl text-primary",
+                badgeClass: "font-headline-md text-lg text-primary uppercase font-bold",
+                iconClass: "material-symbols-outlined text-primary text-3xl",
+            };
+        }
 
+        function showIncidentDetailEmpty() {
+            document.getElementById("incident-detail-empty").classList.remove("hidden");
+            document.getElementById("incident-detail-content").classList.add("hidden");
+        }
+
+        function showIncidentDetailContent() {
+            document.getElementById("incident-detail-empty").classList.add("hidden");
+            document.getElementById("incident-detail-content").classList.remove("hidden");
+        }
+
+        function getCurrentIncidentFeed() {
+            return currentInvestigatorMode === "managed" ? cachedManagedIncidents : cachedRawIncidents;
+        }
+
+        function updateInvestigatorModeButtons() {
+            const managedBtn = document.getElementById("feed-mode-managed");
+            const rawBtn = document.getElementById("feed-mode-raw");
+            const caption = document.getElementById("incident-feed-caption");
+
+            if (currentInvestigatorMode === "managed") {
+                managedBtn.className = "px-3 py-1 rounded-full bg-primary/20 text-primary border border-primary/30 font-label-caps text-[10px] whitespace-nowrap";
+                rawBtn.className = "px-3 py-1 rounded-full bg-surface-variant text-on-surface-variant border border-outline-variant/30 font-label-caps text-[10px] whitespace-nowrap hover:bg-surface-container-high";
+                caption.textContent = "Stateful incidents grouped by behavior, cooldown, and evidence trail.";
+            } else {
+                rawBtn.className = "px-3 py-1 rounded-full bg-primary/20 text-primary border border-primary/30 font-label-caps text-[10px] whitespace-nowrap";
+                managedBtn.className = "px-3 py-1 rounded-full bg-surface-variant text-on-surface-variant border border-outline-variant/30 font-label-caps text-[10px] whitespace-nowrap hover:bg-surface-container-high";
+                caption.textContent = "Direct security alerts from the request stream with hybrid risk detail and vector search.";
+            }
+        }
+
+        function setInvestigatorMode(mode) {
+            currentInvestigatorMode = mode === "raw" ? "raw" : "managed";
+            activeIncidentId = null;
+            activeIncidentSource = currentInvestigatorMode;
+            activeIncidentDetail = null;
+            updateInvestigatorModeButtons();
             renderIncidentFeedList();
         }
 
+        function renderRawIncidentCard(row) {
+            const id = row.incident_id || row.event_id;
+            const score = Number(row.risk_score || 0);
+            const tone = getIncidentTone(score);
+            const isSelected = activeIncidentId === id && activeIncidentSource === "raw";
+            const cardBg = isSelected ? "bg-primary/10 border-primary/50" : "bg-surface-container-low hover:bg-surface-container-high";
+            const strokeDash = `${score}, 100`;
+            const timestamp = formatTimeOnly(row.timestamp);
+
+            return `
+                <div onclick="selectIncident('${id}', 'raw')" class="glass-panel ${cardBg} ${tone.borderColor} rounded-lg p-3 cursor-pointer transition-all duration-200 relative overflow-hidden group">
+                    <div class="flex justify-between items-start mb-1 relative z-10">
+                        <div class="truncate pr-2">
+                            <span class="font-data-mono text-xs ${tone.textClass} font-bold block truncate">${escapeHtml((row.attack_type || "suspicious traffic").toUpperCase())}</span>
+                            <span class="font-data-mono text-[9px] text-on-surface-variant block mt-1">${escapeHtml(timestamp)} • ${escapeHtml(row.ip || "Unknown")}</span>
+                        </div>
+                        <div class="relative w-8 h-8 shrink-0">
+                            <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                <path class="text-surface-variant stroke-current" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke-width="3"></path>
+                                <path class="${tone.textClass} stroke-current" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke-dasharray="${strokeDash}" stroke-width="3"></path>
+                            </svg>
+                            <span class="absolute inset-0 flex items-center justify-center font-data-mono text-[9px] font-bold ${tone.textClass}">${score}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderManagedIncidentCard(row) {
+            const id = row._id;
+            const score = Number(row.max_risk_score || 0);
+            const suppressed = row.resolution === "false_positive";
+            const tone = getIncidentTone(score, suppressed);
+            const isSelected = activeIncidentId === id && activeIncidentSource === "managed";
+            const cardBg = isSelected ? "bg-primary/10 border-primary/50" : "bg-surface-container-low hover:bg-surface-container-high";
+            const strokeDash = `${Math.min(score, 100)}, 100`;
+            const statusText = suppressed
+                ? "FALSE POSITIVE"
+                : String(row.status || "unknown").replace(/_/g, " ").toUpperCase();
+            const behavior = String(row.behavior_type || "stateful").replace(/_/g, " ").toUpperCase();
+            const sourceIps = (row.source_ips || []).join(", ") || "Unknown";
+            const summary = `${behavior} • ${Number(row.evidence_count || 0)} evidence`;
+            const cooldown = row.cooldown_until ? `Cooldown: ${formatTimeOnly(row.cooldown_until)}` : statusText;
+
+            return `
+                <div onclick="selectIncident('${id}', 'managed')" class="glass-panel ${cardBg} ${tone.borderColor} rounded-lg p-3 cursor-pointer transition-all duration-200 relative overflow-hidden group">
+                    <div class="flex justify-between items-start mb-2 relative z-10">
+                        <div class="truncate pr-2">
+                            <span class="font-data-mono text-xs ${tone.textClass} font-bold block truncate">${escapeHtml(statusText)}</span>
+                            <span class="font-data-mono text-[9px] text-on-surface-variant block mt-1">${escapeHtml(sourceIps)}</span>
+                        </div>
+                        <div class="relative w-8 h-8 shrink-0">
+                            <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                <path class="text-surface-variant stroke-current" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke-width="3"></path>
+                                <path class="${tone.textClass} stroke-current" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke-dasharray="${strokeDash}" stroke-width="3"></path>
+                            </svg>
+                            <span class="absolute inset-0 flex items-center justify-center font-data-mono text-[9px] font-bold ${tone.textClass}">${score}</span>
+                        </div>
+                    </div>
+                    <div class="space-y-1 relative z-10">
+                        <div class="font-data-mono text-[10px] text-on-surface truncate">${escapeHtml(row.title || behavior)}</div>
+                        <div class="font-data-mono text-[9px] text-on-surface-variant">${escapeHtml(summary)}</div>
+                        <div class="font-data-mono text-[9px] text-on-surface-variant">${escapeHtml(cooldown)}</div>
+                    </div>
+                </div>
+            `;
+        }
+
         async function loadIncidentFeed() {
-            try {
-                // Fetch recent incidents
-                cachedIncidents = await fetchAPI(`/api/incidents?limit=100`);
-                renderIncidentFeedList();
-            } catch (error) {
-                console.error("Failed to load incident feed:", error);
-                document.getElementById("incident-feed-list").innerHTML = `<div class="py-8 text-center text-error">Failed to fetch incident feed from backend.</div>`;
+            updateInvestigatorModeButtons();
+            const results = await Promise.allSettled([
+                fetchAPI("/api/incidents?limit=100"),
+                fetchAPI("/api/incidents/managed?limit=100")
+            ]);
+
+            rawFeedError = null;
+            managedFeedError = null;
+
+            if (results[0].status === "fulfilled") {
+                cachedRawIncidents = results[0].value || [];
+            } else {
+                cachedRawIncidents = [];
+                rawFeedError = results[0].reason?.message || "Unable to load raw alerts.";
+                console.error("Failed to load raw incident feed:", results[0].reason);
+            }
+
+            if (results[1].status === "fulfilled") {
+                cachedManagedIncidents = results[1].value || [];
+            } else {
+                cachedManagedIncidents = [];
+                managedFeedError = results[1].reason?.message || "Unable to load correlated incidents.";
+                console.error("Failed to load managed incident feed:", results[1].reason);
+            }
+
+            renderIncidentFeedList();
+
+            if (pendingIncidentIp) {
+                const matched = cachedRawIncidents.find(row => row.ip === pendingIncidentIp);
+                if (matched) {
+                    const targetId = matched.incident_id || matched.event_id;
+                    pendingIncidentIp = null;
+                    currentInvestigatorMode = "raw";
+                    updateInvestigatorModeButtons();
+                    selectIncident(targetId, "raw");
+                } else if (!rawFeedError) {
+                    showToast("Not Found", `No recent raw alert tracked for IP ${pendingIncidentIp}`, "warning", "error");
+                    pendingIncidentIp = null;
+                }
             }
         }
 
         function renderIncidentFeedList() {
             const container = document.getElementById("incident-feed-list");
-            
-            const filtered = cachedIncidents;
+            const records = getCurrentIncidentFeed();
+            const errorMessage = currentInvestigatorMode === "managed" ? managedFeedError : rawFeedError;
 
-            if (!filtered.length) {
-                container.innerHTML = `<div class="py-8 text-center text-outline">No matching incidents found.</div>`;
+            updateInvestigatorModeButtons();
+
+            if (!records.length) {
+                activeIncidentId = null;
+                activeIncidentDetail = null;
+                showIncidentDetailEmpty();
+                container.innerHTML = `<div class="py-8 text-center ${errorMessage ? "text-error" : "text-outline"}">${escapeHtml(errorMessage || "No incidents available for the selected feed.")}</div>`;
                 return;
             }
 
-            container.innerHTML = filtered.map(row => {
-                const id = row.incident_id || row.event_id;
-                const type = row.attack_type || "SUSPICIOUS TRAFFIC";
-                const isSelected = activeIncidentId === id;
-                const score = row.risk_score || 0;
-                
-                let borderColor = "border-outline-variant/30";
-                let textClass = "text-primary";
-                if (score >= 90) {
-                    borderColor = "border-l-2 border-l-error";
-                    textClass = "text-error";
-                } else if (score >= 70) {
-                    borderColor = "border-l-2 border-l-secondary";
-                    textClass = "text-secondary";
-                } else if (score > 0) {
-                    borderColor = "border-l-2 border-l-primary";
-                    textClass = "text-primary";
-                }
-
-                const cardBg = isSelected ? "bg-primary/10 border-primary/50" : "bg-surface-container-low hover:bg-surface-container-high";
-
-                // Progress circle values
-                const strokeDash = `${score}, 100`;
-
-                return `
-                    <div onclick="selectIncident('${id}')" class="glass-panel ${cardBg} ${borderColor} rounded-lg p-3 cursor-pointer transition-all duration-200 relative overflow-hidden group">
-                        <div class="flex justify-between items-start mb-1 relative z-10">
-                            <div class="truncate pr-2">
-                                <span class="font-data-mono text-xs ${textClass} font-bold block truncate">${type.toUpperCase()}</span>
-                                <span class="font-data-mono text-[9px] text-on-surface-variant block mt-1">${row.timestamp.substring(11, 19)} UTC • ${row.ip}</span>
-                            </div>
-                            <div class="relative w-8 h-8 shrink-0">
-                                <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                                    <path class="text-surface-variant stroke-current" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke-width="3"></path>
-                                    <path class="${textClass} stroke-current" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke-dasharray="${strokeDash}" stroke-width="3"></path>
-                                </svg>
-                                <span class="absolute inset-0 flex items-center justify-center font-data-mono text-[9px] font-bold ${textClass}">${score}</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
+            container.innerHTML = records.map(row => {
+                return currentInvestigatorMode === "managed" ? renderManagedIncidentCard(row) : renderRawIncidentCard(row);
             }).join("");
-            
-            // Auto select first incident if none selected and incidents are loaded
-            if (!activeIncidentId && filtered.length > 0) {
-                selectIncident(filtered[0].incident_id || filtered[0].event_id);
+
+            const hasSelected = records.some(row => {
+                const rowId = currentInvestigatorMode === "managed" ? row._id : (row.incident_id || row.event_id);
+                return rowId === activeIncidentId && activeIncidentSource === currentInvestigatorMode;
+            });
+
+            if (!hasSelected) {
+                const first = records[0];
+                const firstId = currentInvestigatorMode === "managed" ? first._id : (first.incident_id || first.event_id);
+                selectIncident(firstId, currentInvestigatorMode);
             }
         }
 
-        async function selectIncident(id) {
+        function applyDetailTone(score, suppressed = false) {
+            const tone = getIncidentTone(score, suppressed);
+            document.getElementById("detail-title").className = tone.titleClass;
+            document.getElementById("detail-severity-badge").className = tone.badgeClass;
+            document.getElementById("detail-title-icon").className = tone.iconClass;
+            document.getElementById("detail-risk-score-circle").className = `${tone.textClass} stroke-current`;
+            document.getElementById("detail-risk-score-text").className = `absolute inset-0 flex items-center justify-center font-display-lg text-lg font-bold ${tone.textClass}`;
+        }
+
+        function resetSimilarIncidentsTable(message) {
+            document.getElementById("similar-incidents-tbody").innerHTML = `
+                <tr>
+                    <td colspan="5" class="py-4 text-center text-outline">${escapeHtml(message)}</td>
+                </tr>
+            `;
+        }
+
+        function setDetailLabels(labels) {
+            document.getElementById("detail-event-id-label").textContent = labels.eventId;
+            document.getElementById("detail-timestamp-label").textContent = labels.timestamp;
+            document.getElementById("detail-ip-label").textContent = labels.ip;
+            document.getElementById("detail-method-path-label").textContent = labels.methodPath;
+            document.getElementById("detail-state-label").textContent = labels.state;
+            document.getElementById("detail-evidence-label").textContent = labels.evidence;
+            document.getElementById("detail-raw-heading").textContent = labels.rawHeading;
+            document.getElementById("detail-analysis-title").textContent = labels.analysisTitle;
+        }
+
+        function renderEvidenceLog(evidence) {
+            if (!Array.isArray(evidence) || !evidence.length) {
+                return "No correlated evidence records are stored for this incident.";
+            }
+
+            return evidence.map((event, index) => {
+                const requestObj = event.request || {};
+                const sourceIp = event.source_ip || event.ip || requestObj.source_ip || "Unknown";
+                const uri = event.uri || event.original_url || requestObj.uri || "-";
+                const attackType = event.attack_type || event.category || "unknown";
+                const risk = event.risk_score || event.score || 0;
+                const eventId = event.event_id || event._id || `evt-${index + 1}`;
+                const timestamp = event.timestamp || event.created_at || `event-${index + 1}`;
+                const raw = event.raw || event.raw_log || requestObj.raw_log;
+                let line = `[${timestamp}] ${eventId} | ${sourceIp} | ${attackType} | ${uri} | risk=${risk}`;
+                if (raw) {
+                    line += `\n  raw: ${raw}`;
+                }
+                return line;
+            }).join("\n\n");
+        }
+
+        function populateRawIncidentDetail(detail) {
+            activeIncidentDetail = detail;
+            const score = Number(detail.risk_score || 0);
+            const malicious = detail.verdict === "malicious" || detail.verdict === "suspicious" || score >= 70;
+
+            applyDetailTone(score, false);
+            setDetailLabels({
+                eventId: "EVENT ID",
+                timestamp: "TIMESTAMP",
+                ip: "SOURCE IP / ATTACKS",
+                methodPath: "METHOD & PATH",
+                state: "STATE / DETECTION",
+                evidence: "EVIDENCE / TARGETS",
+                rawHeading: "RAW LOG / REQUEST DATA",
+                analysisTitle: "AI Vector Analysis",
+            });
+
+            document.getElementById("detail-title-icon").textContent = malicious ? "warning" : "verified";
+            document.getElementById("detail-title").textContent = malicious
+                ? `${(detail.attack_type || "MALICIOUS").toUpperCase()} // THREAT DETECTED`
+                : "LEGITIMATE // CLEAN REQUEST";
+            document.getElementById("detail-meta-header").textContent = `INCIDENT ID: ${detail.incident_id || detail.event_id} | HYBRID RISK: ${(detail.verdict || "unknown").toUpperCase()}`;
+            document.getElementById("detail-severity-badge").textContent = detail.severity || "unknown";
+            document.getElementById("detail-risk-score-text").textContent = score;
+            document.getElementById("detail-risk-score-circle").setAttribute("stroke-dasharray", `${Math.min(score, 100)}, 100`);
+            document.getElementById("detail-event-id").textContent = detail.event_id || "N/A";
+            document.getElementById("detail-timestamp").textContent = formatTimestamp(detail.timestamp);
+            document.getElementById("detail-ip").innerHTML = `${escapeHtml(detail.ip || "Unknown")} <span class="text-on-surface-variant text-[10px]">(Client IP)</span>`;
+            document.getElementById("detail-method-path").textContent = `${detail.method || "-"} ${detail.uri || "-"}`;
+            document.getElementById("detail-state").textContent = `${String(detail.detection_method || "hybrid").toUpperCase()} • ${String(detail.verdict || "unknown").toUpperCase()}`;
+            document.getElementById("detail-evidence").textContent = `${Array.isArray(detail.matched_rule_ids) ? detail.matched_rule_ids.length : 0} rules • ${detail.uri || "-"}`;
+            document.getElementById("detail-raw-code").textContent = detail.raw || "No raw payloads or POST body captures found in the log trace.";
+
+            const topPattern = detail.patterns && detail.patterns.length ? detail.patterns[0] : null;
+            const aiDesc = document.getElementById("detail-ai-desc");
+            const similarityText = document.getElementById("detail-ai-similarity");
+            const progress = document.getElementById("detail-ai-progress");
+            const mitreContainer = document.getElementById("detail-mitre-tags");
+
+            if (topPattern) {
+                const similarityScore = (Number(topPattern.score || 0) * 100).toFixed(1);
+                aiDesc.innerHTML = `Pattern matching similarity describes high correlation to known signature <strong>${escapeHtml(topPattern.name)}</strong>. Tactics match <strong>${escapeHtml(topPattern.attack_type)}</strong> signatures. ${escapeHtml(topPattern.description || "")}`;
+                similarityText.textContent = `${similarityScore}%`;
+                progress.style.width = `${similarityScore}%`;
+                mitreContainer.innerHTML = `
+                    <span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">MITRE: ${escapeHtml(topPattern.mitre || "N/A")}</span>
+                    <span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">TACTIC: ${escapeHtml(topPattern.attack_type || "unknown")}</span>
+                `;
+            } else {
+                aiDesc.textContent = `Hybrid risk explanation: ${detail.hybrid_explanation || detail.rule_explanation || "No anomaly description is attached."}`;
+                similarityText.textContent = "0.0%";
+                progress.style.width = "0%";
+                mitreContainer.innerHTML = `<span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">MITRE: N/A</span>`;
+            }
+
+            const remedList = document.getElementById("detail-remediations");
+            if (detail.recommendations && detail.recommendations.length) {
+                remedList.innerHTML = detail.recommendations.map(rem => `<li>${escapeHtml(rem)}</li>`).join("");
+            } else {
+                remedList.innerHTML = `<li>Review the raw payload trace manually in forensic timeline.</li><li>Correlate source IP behaviors at edge routers.</li>`;
+            }
+
+            document.getElementById("similar-incidents-section").classList.remove("hidden");
+            document.getElementById("btn-mark-false-positive").classList.add("hidden");
+            document.getElementById("btn-find-similar-incidents").disabled = false;
+            document.getElementById("btn-find-similar-incidents").classList.remove("hidden");
+            resetSimilarIncidentsTable("Click button to trigger MongoDB Atlas Vector Search...");
+        }
+
+        function populateManagedIncidentDetail(detail) {
+            activeIncidentDetail = detail;
+            const score = Number(detail.max_risk_score || 0);
+            const falsePositive = detail.resolution === "false_positive";
+            const statusText = String(detail.status || "unknown").replace(/_/g, " ").toUpperCase();
+            const resolutionText = detail.resolution ? String(detail.resolution).replace(/_/g, " ").toUpperCase() : "";
+            const titleText = falsePositive
+                ? "SUPPRESSED // FALSE POSITIVE"
+                : detail.status === "resolved" || detail.status === "closed"
+                    ? `SUPPRESSED // ${resolutionText || statusText}`
+                    : (detail.title || `${String(detail.behavior_type || "stateful").replace(/_/g, " ").toUpperCase()} INCIDENT`);
+
+            applyDetailTone(score, falsePositive);
+            setDetailLabels({
+                eventId: "INCIDENT ID",
+                timestamp: "UPDATED AT",
+                ip: "SOURCE IPS / TYPES",
+                methodPath: "BEHAVIOR / TARGETS",
+                state: "STATE / COOLDOWN",
+                evidence: "EVIDENCE / TARGETS",
+                rawHeading: "CORRELATED EVIDENCE LOG",
+                analysisTitle: "Stateful Correlation Summary",
+            });
+
+            document.getElementById("detail-title-icon").textContent = falsePositive ? "verified_user" : "warning";
+            document.getElementById("detail-title").textContent = titleText;
+            document.getElementById("detail-meta-header").textContent = `INCIDENT ID: ${detail._id || detail.correlation_id || "N/A"} | STATUS: ${statusText} | BEHAVIOR: ${String(detail.behavior_type || "single").replace(/_/g, " ").toUpperCase()}`;
+            document.getElementById("detail-severity-badge").textContent = falsePositive ? "false positive" : (detail.severity || statusText.toLowerCase());
+            document.getElementById("detail-risk-score-text").textContent = score;
+            document.getElementById("detail-risk-score-circle").setAttribute("stroke-dasharray", `${Math.min(score, 100)}, 100`);
+            document.getElementById("detail-event-id").textContent = detail._id || detail.correlation_id || "N/A";
+            document.getElementById("detail-timestamp").textContent = formatTimestamp(detail.updated_at || detail.created_at);
+            document.getElementById("detail-ip").textContent = `${(detail.source_ips || []).join(", ") || "Unknown"} | ${(detail.attack_types || []).join(", ") || "unknown"}`;
+            document.getElementById("detail-method-path").textContent = `${String(detail.behavior_type || "single").replace(/_/g, " ")} • ${(detail.target_endpoints || []).join(", ") || "No targets"}`;
+            document.getElementById("detail-state").textContent = falsePositive
+                ? `RESOLVED // FALSE POSITIVE${detail.resolution_notes ? ` • ${detail.resolution_notes}` : ""}`
+                : detail.cooldown_until
+                    ? `${statusText} until ${formatTimestamp(detail.cooldown_until)}`
+                    : statusText;
+            document.getElementById("detail-evidence").textContent = `${Number(detail.evidence_count || 0)} events • ${(detail.target_endpoints || []).length} endpoints`;
+            document.getElementById("detail-raw-code").textContent = renderEvidenceLog(detail.evidence || []);
+
+            document.getElementById("detail-ai-desc").textContent = `Behavior ${String(detail.behavior_type || "single").replace(/_/g, " ")} spans ${(detail.target_endpoints || []).length} targets and ${(detail.source_ips || []).length} source IPs. This summary is driven by the stateful correlation engine rather than vector search.`;
+            document.getElementById("detail-ai-similarity").textContent = `${score}%`;
+            document.getElementById("detail-ai-progress").style.width = `${Math.min(score, 100)}%`;
+            document.getElementById("detail-mitre-tags").innerHTML = `
+                <span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">STATUS: ${escapeHtml(statusText)}</span>
+                <span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">BEHAVIOR: ${escapeHtml(String(detail.behavior_type || "single").replace(/_/g, " ").toUpperCase())}</span>
+                <span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">TARGETS: ${Number((detail.target_endpoints || []).length)}</span>
+            `;
+
+            const remedList = document.getElementById("detail-remediations");
+            if (falsePositive) {
+                remedList.innerHTML = `
+                    <li>Suppressed this incident as analyst-approved benign activity.</li>
+                    <li>Stored the incident embedding in the false-positive vector memory.</li>
+                    <li>${escapeHtml(detail.resolution_notes || "No analyst notes recorded.")}</li>
+                `;
+            } else {
+                remedList.innerHTML = `
+                    <li>Review the correlated evidence log for repeated behaviors and target expansion.</li>
+                    <li>Maintain cooldown visibility while monitoring for severity escalation.</li>
+                    <li>Escalate to suppression only after analyst validation of repeated benign behavior.</li>
+                `;
+            }
+
+            document.getElementById("similar-incidents-section").classList.add("hidden");
+            const fpButton = document.getElementById("btn-mark-false-positive");
+            fpButton.classList.remove("hidden");
+            fpButton.disabled = falsePositive;
+            fpButton.textContent = falsePositive ? "ALREADY SUPPRESSED" : "MARK AS FALSE POSITIVE";
+            if (falsePositive) {
+                fpButton.className = "bg-tertiary-container/10 text-tertiary-container border border-tertiary-container/30 font-label-caps text-xs px-5 py-2.5 rounded opacity-70 cursor-not-allowed whitespace-nowrap flex items-center gap-2";
+                fpButton.innerHTML = `<span class="material-symbols-outlined text-sm">verified</span> ALREADY SUPPRESSED`;
+            } else {
+                fpButton.className = "bg-tertiary-container/20 text-tertiary border border-tertiary-container/40 font-label-caps text-xs px-5 py-2.5 rounded hover:bg-tertiary-container/30 transition-colors whitespace-nowrap flex items-center gap-2 active:scale-95";
+                fpButton.innerHTML = `<span class="material-symbols-outlined text-sm">rule</span> MARK AS FALSE POSITIVE`;
+            }
+        }
+
+        async function selectIncident(id, source = currentInvestigatorMode) {
             if (!id) return;
             activeIncidentId = id;
-
-            // Re-render feed list to show active state selection
+            activeIncidentSource = source === "raw" ? "raw" : "managed";
             renderIncidentFeedList();
+            showIncidentDetailContent();
 
-            const emptyState = document.getElementById("incident-detail-empty");
-            const contentState = document.getElementById("incident-detail-content");
-
-            emptyState.classList.add("hidden");
-            contentState.classList.remove("hidden");
+            if (activeIncidentSource === "managed") {
+                const detail = cachedManagedIncidents.find(row => row._id === id);
+                if (!detail) {
+                    showToast("Forensic Error", "Unable to find correlated incident in the local feed cache.", "error", "error");
+                    return;
+                }
+                populateManagedIncidentDetail(detail);
+                return;
+            }
 
             try {
                 const detail = await fetchAPI(`/api/incidents/${id}`);
-                
-                // Populate elements
-                const isMalicious = detail.verdict === "malicious" || detail.verdict === "suspicious" || detail.risk_score >= 70;
-                const detailTitle = document.getElementById("detail-title");
-                
-                if (isMalicious) {
-                    detailTitle.textContent = `${detail.attack_type || "MALICIOUS"} // THREAT DETECTED`;
-                    detailTitle.className = "font-display-lg text-xl xl:text-2xl text-error neon-text-error";
-                } else {
-                    detailTitle.textContent = "LEGITIMATE // CLEAN REQUEST";
-                    detailTitle.className = "font-display-lg text-xl xl:text-2xl text-tertiary-container";
-                }
-
-                document.getElementById("detail-meta-header").textContent = `INCIDENT ID: ${detail.incident_id || detail.event_id} | HYBRID RISK: ${detail.verdict.toUpperCase()}`;
-                
-                const score = detail.risk_score || 0;
-                document.getElementById("detail-risk-score-text").textContent = score;
-                document.getElementById("detail-risk-score-circle").setAttribute("stroke-dasharray", `${score}, 100`);
-                
-                // Color badges based on severity
-                const sevBadge = document.getElementById("detail-severity-badge");
-                sevBadge.textContent = detail.severity || "unknown";
-                if (score >= 90) {
-                    sevBadge.className = "font-headline-md text-lg text-error uppercase font-bold";
-                } else if (score >= 70) {
-                    sevBadge.className = "font-headline-md text-lg text-secondary uppercase font-bold";
-                } else {
-                    sevBadge.className = "font-headline-md text-lg text-primary uppercase font-bold";
-                }
-
-                // Metadata cards
-                document.getElementById("detail-event-id").textContent = detail.event_id || "N/A";
-                document.getElementById("detail-timestamp").textContent = detail.timestamp || "N/A";
-                document.getElementById("detail-ip").innerHTML = `${detail.ip} <span class="text-on-surface-variant text-[10px]">(Client IP)</span>`;
-                document.getElementById("detail-method-path").textContent = `${detail.method} ${detail.uri}`;
-
-                // Raw Payload code
-                const rawCode = document.getElementById("detail-raw-code");
-                if (detail.raw) {
-                    // Escape HTML strings for safety
-                    rawCode.innerHTML = detail.raw
-                        .replace(/&/g, "&amp;")
-                        .replace(/</g, "&lt;")
-                        .replace(/>/g, "&gt;");
-                } else {
-                    rawCode.textContent = "No raw payloads or POST body captures found in the log trace.";
-                }
-
-                // AI Vector Analysis Card details
-                const topPattern = detail.patterns && detail.patterns.length ? detail.patterns[0] : null;
-                const aiDesc = document.getElementById("detail-ai-desc");
-                const similarityText = document.getElementById("detail-ai-similarity");
-                const progress = document.getElementById("detail-ai-progress");
-                const mitreContainer = document.getElementById("detail-mitre-tags");
-
-                if (topPattern) {
-                    const similarityScore = (topPattern.score * 100).toFixed(1);
-                    aiDesc.innerHTML = `
-                        Pattern matching similarity describes high correlation to known signature <strong>${topPattern.name}</strong>. 
-                        Tactics match <strong>${topPattern.attack_type}</strong> signatures. ${topPattern.description}
-                    `;
-                    similarityText.textContent = `${similarityScore}%`;
-                    progress.style.width = `${similarityScore}%`;
-                    mitreContainer.innerHTML = `
-                        <span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">MITRE: ${topPattern.mitre || "N/A"}</span>
-                        <span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">TACTIC: ${topPattern.attack_type}</span>
-                    `;
-                } else {
-                    aiDesc.textContent = `Hybrid risk explanation: ${detail.hybrid_explanation || detail.rule_explanation || "No anomaly description is attached."}`;
-                    similarityText.textContent = "0.0%";
-                    progress.style.width = "0%";
-                    mitreContainer.innerHTML = `<span class="bg-surface-dim border border-outline-variant/50 text-on-surface font-label-caps text-[9px] px-2 py-0.5 rounded">MITRE: N/A</span>`;
-                }
-
-                // Remediations list
-                const remedList = document.getElementById("detail-remediations");
-                if (detail.recommendations && detail.recommendations.length) {
-                    remedList.innerHTML = detail.recommendations.map(rem => `<li>${rem}</li>`).join("");
-                } else {
-                    remedList.innerHTML = `<li>Review the raw payload trace manually in forensic timeline.</li><li>Correlate source IP behaviors at edge routers.</li>`;
-                }
-
-                // Reset similar incidents table content
-                document.getElementById("similar-incidents-tbody").innerHTML = `
-                    <tr>
-                        <td colspan="5" class="py-4 text-center text-outline">Click button to trigger MongoDB Atlas Vector Search...</td>
-                    </tr>
-                `;
-
+                populateRawIncidentDetail(detail);
             } catch (error) {
                 console.error("Failed to load incident detail:", error);
                 showToast("Forensic Error", "Failed to retrieve incident details from backend.", "error", "error");
@@ -1754,8 +2268,7 @@
         }
 
         async function findSimilarIncidents() {
-            if (!activeIncidentId) return;
-            const btn = document.getElementById("btn-find-similar-incidents");
+            if (!activeIncidentId || activeIncidentSource !== "raw") return;
             const tbody = document.getElementById("similar-incidents-tbody");
 
             tbody.innerHTML = `
@@ -1768,36 +2281,29 @@
 
             try {
                 const similar = await fetchAPI(`/api/incidents/${activeIncidentId}/similar-incidents`);
-                
+
                 if (!similar || !similar.length) {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="5" class="py-4 text-center text-outline">
-                                No historically similar logs matched the vector pattern. This is a unique variant.
-                            </td>
-                        </tr>
-                    `;
+                    resetSimilarIncidentsTable("No historically similar logs matched the vector pattern. This is a unique variant.");
                     return;
                 }
 
                 tbody.innerHTML = similar.map(row => {
-                    const simScore = (row.similarity_score * 100).toFixed(1);
+                    const simScore = (Number(row.similarity_score || 0) * 100).toFixed(1);
                     return `
                         <tr class="border-b border-outline-variant/10 hover:bg-surface-container-low/30 transition-colors">
-                            <td class="py-2 px-3 text-on-surface truncate">${row.timestamp || "Unknown"}</td>
-                            <td class="py-2 px-3 text-primary">${row.ip || "Unknown"}</td>
-                            <td class="py-2 px-3 text-on-surface truncate max-w-[250px]" title="${row.uri}">${row.uri || "-"}</td>
-                            <td class="py-2 px-3 text-on-surface">${row.risk_score || 0}</td>
+                            <td class="py-2 px-3 text-on-surface truncate">${escapeHtml(row.timestamp || "Unknown")}</td>
+                            <td class="py-2 px-3 text-primary">${escapeHtml(row.ip || "Unknown")}</td>
+                            <td class="py-2 px-3 text-on-surface truncate max-w-[250px]" title="${escapeHtml(row.uri || "-")}">${escapeHtml(row.uri || "-")}</td>
+                            <td class="py-2 px-3 text-on-surface">${Number(row.risk_score || 0)}</td>
                             <td class="py-2 px-3 text-secondary font-bold">${simScore}%</td>
                         </tr>
                     `;
                 }).join("");
-                
-                showToast("Vector Search Results", `Found ${similar.length} historical logs matching payload structure.`, "manage_search", "success");
 
+                showToast("Vector Search Results", `Found ${similar.length} historical logs matching payload structure.`, "manage_search", "success");
             } catch (error) {
                 console.error("Vector search failed:", error);
-                tbody.innerHTML = `
+                document.getElementById("similar-incidents-tbody").innerHTML = `
                     <tr>
                         <td colspan="5" class="py-4 text-center text-error">
                             Vector search aggregation query failed. Ensure Vector Index exists in Atlas.
@@ -1807,12 +2313,51 @@
             }
         }
 
+        async function markCurrentIncidentFalsePositive() {
+            if (activeIncidentSource !== "managed" || !activeIncidentId) return;
+            const notes = window.prompt("Optional analyst notes for this false positive:", activeIncidentDetail?.resolution_notes || "");
+            if (notes === null) return;
+
+            try {
+                const response = await fetch(`/api/incidents/${encodeURIComponent(activeIncidentId)}/false-positive`, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({notes})
+                });
+                if (!response.ok) throw new Error(await extractAPIError(response));
+                await response.json();
+
+                const cached = cachedManagedIncidents.find(row => row._id === activeIncidentId);
+                if (cached) {
+                    cached.status = "resolved";
+                    cached.resolution = "false_positive";
+                    cached.resolution_notes = notes;
+                    cached.updated_at = new Date().toISOString();
+                }
+
+                renderIncidentFeedList();
+                if (cached) {
+                    populateManagedIncidentDetail(cached);
+                }
+                showToast("Incident Suppressed", "Managed incident recorded as a known false positive.", "verified", "success");
+            } catch (error) {
+                console.error("Failed to mark incident as false positive:", error);
+                showToast("Suppression Failed", error.message || "Unable to suppress this incident.", "error", "error");
+            }
+        }
+
         function selectIncidentByIP(ip) {
-            const matched = cachedIncidents.find(x => x.ip === ip);
+            currentInvestigatorMode = "raw";
+            updateInvestigatorModeButtons();
+            const matched = cachedRawIncidents.find(row => row.ip === ip);
             if (matched) {
-                selectIncident(matched.incident_id || matched.event_id);
-            } else {
-                showToast("Not Found", `No recent active incidents tracked for IP ${ip}`, "warning", "error");
+                selectIncident(matched.incident_id || matched.event_id, "raw");
+                return;
+            }
+
+            pendingIncidentIp = ip;
+            if (window.location.hash === "#investigator") {
+                loadIncidentFeed();
             }
         }
 

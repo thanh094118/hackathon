@@ -1,5 +1,40 @@
 # Current Status (2026-05-31)
 
+- **Dashboard Overview Malicious Count Fix (2026-06-06)**:
+  - Fixed `Malicious Requests = 0` in the static dashboard overview.
+  - Root cause: `src/dashboard/query_adapter.py` overview summary still used legacy flat-field MongoDB match conditions (`prediction.label`, `should_alert`, `risk_score`) while live data is stored under nested Schema V2 fields (`detection.ml.*`, `scoring.*`).
+  - Updated malicious/high-severity summary match queries to recognize nested schema fields while keeping legacy flat fallbacks.
+  - Added regression coverage in [tests/test_dashboard_query_adapter.py](file:///d:/Code/test/hackathon/tests/test_dashboard_query_adapter.py) asserting live summary queries include nested `detection.ml.*` and `scoring.*` paths.
+  - Verification:
+    - `/home/thanh/miniconda3/envs/easymocap/bin/python -m pytest -q tests/test_dashboard_query_adapter.py tests/test_dashboard_api.py` passed: 51 tests.
+    - Live check via `DashboardQueryAdapter(use_mock=False).get_soc_summary("24h")` now returns non-zero malicious counts (`malicious_requests: 5694`) and high-severity counts (`high_severity_incidents: 4490`) against the connected MongoDB dataset.
+
+- **Static Dashboard Managed-Incident Route Regression Fix (2026-06-05)**:
+  - Diagnosed `GET /api/incidents/managed?limit=100` returning `404` on the FastAPI-served static dashboard.
+  - Root cause: `src/dashboard/api.py` declared dynamic route `GET /api/incidents/{incident_id}` before the specific managed-feed route, so FastAPI matched `"managed"` as an `incident_id`.
+  - Fixed by moving `GET /api/incidents/managed` above the dynamic detail route.
+  - Added regression coverage in [tests/test_dashboard_api.py](file:///d:/Code/test/hackathon/tests/test_dashboard_api.py) to ensure the managed feed endpoint is not shadowed again.
+  - Verification:
+    - `/home/thanh/miniconda3/envs/easymocap/bin/python -m pytest -q tests/test_dashboard_api.py -q` passed.
+
+- **Static Dashboard: Stateful Alerting + Baseline Analytics UI (2026-06-05)**:
+  - Extended [src/dashboard/api.py](file:///d:/Code/test/hackathon/src/dashboard/api.py) with shared baseline snapshot helpers, richer `GET /api/baseline/status` payloads (`endpoint_floors`, `comparison_last_24h`, `generated_at`), and new `POST /api/baseline/recalculate`.
+  - Added `get_baseline_comparison_last_24h(...)` to [src/scoring/mongodb_queries.py](file:///d:/Code/test/hackathon/src/scoring/mongodb_queries.py) to aggregate 24 hourly actual-vs-threshold comparison points from `requests` + `attack_baselines`.
+  - Updated [src/dashboard/static/index.html](file:///d:/Code/test/hackathon/src/dashboard/static/index.html) to add:
+    - `Baseline Analytics` navigation and workspace.
+    - Stateful `Correlated Incidents` vs `Raw Security Alerts` mode switch in Threat Investigator.
+    - Managed incident detail rendering from `/api/incidents/managed`.
+    - `Mark as False Positive` action for managed incidents only, with immediate local UI suppression update.
+  - Extended [tests/test_dashboard_api.py](file:///d:/Code/test/hackathon/tests/test_dashboard_api.py) with coverage for:
+    - baseline status enriched payload
+    - lazy baseline/floor materialization
+    - manual baseline recalculation
+    - false-positive success/failure flows
+  - Verification:
+    - `python -m compileall src` passed.
+    - `/home/thanh/miniconda3/envs/easymocap/bin/python -m pytest -q tests/test_dashboard_api.py tests/test_smart_alerting.py` passed: 35 tests.
+    - Browser/manual visual verification of the updated static dashboard was not run in this session.
+
 - **MongoDB Schema Restructuring (Flat to Nested Schema Version 2)**:
   - Restructured flat database structures into logical nested sub-documents (`request`, `preprocessed`, `features`, `detection`, `scoring`) to align with production best practices.
   - Implemented schema definitions, conversion mapping, and validation helpers in [src/schemas/mongodb_schema.py](file:///d:/Code/test/hackathon/src/schemas/mongodb_schema.py) and [src/schemas/field_mapping.py](file:///d:/Code/test/hackathon/src/schemas/field_mapping.py).
@@ -145,4 +180,3 @@
   - **Endpoint-Group Specific Baselines & Min Floors**: Replaced the global minimum floor with dynamic, endpoint-group specific floors. Segmented paths into `sensitive`, `api`, `default`, and `root` groups, automatically projecting them in MongoDB via aggregation pipelines (computing 90th percentile scaled floors) and resolving them in memory.
   - **Smokescreen Protection (Contextual Risk Separation)**: Implemented priority risk scoring in `CorrelationEngine` and `IncidentManager`. If an incident contains requests targeting different endpoint groups, its risk score and severity are determined solely by the most sensitive group present, preventing attackers from diluting high-severity threats on sensitive resources using low-severity volume/noise on static/root resources.
   - **Verification**: Added 5 new tests to `tests/test_smart_alerting.py` (covering grouping, endpoint floors, smokescreen protection, and merge recalculation). All 309 repository tests passed.
-

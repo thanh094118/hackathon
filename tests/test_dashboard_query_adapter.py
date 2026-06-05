@@ -73,6 +73,45 @@ def test_soc_summary_trend_disabled_for_all_time():
     assert summary.get("malicious_requests_trend") is None
 
 
+def test_soc_summary_live_uses_nested_schema_for_malicious_and_high_severity(monkeypatch):
+    adapter = DashboardQueryAdapter(use_mock=True)
+    _force_mongodb_mode(adapter)
+
+    seen_queries = []
+
+    def fake_count_documents(collection_name, query):
+        seen_queries.append((collection_name, query))
+        if collection_name == "requests" and query == {}:
+            return 25
+        if collection_name == "incidents" and query == {}:
+            return 9
+        if collection_name == "requests":
+            return 7
+        if collection_name == "incidents":
+            return 2
+        return 0
+
+    monkeypatch.setattr(adapter, "_count_documents", fake_count_documents)
+    monkeypatch.setattr(adapter, "_get_materialized_campaigns_count", lambda: {"count": 0, "last_updated": None})
+
+    summary = adapter.get_soc_summary(timeframe="all")
+
+    assert summary["malicious_requests"] == 7
+    assert summary["high_severity_incidents"] == 2
+
+    malicious_query = seen_queries[1][1]
+    high_severity_query = seen_queries[3][1]
+
+    malicious_keys = {next(iter(item.keys())) for item in malicious_query["$or"]}
+    high_severity_keys = {next(iter(item.keys())) for item in high_severity_query["$or"]}
+
+    assert "detection.ml.label" in malicious_keys
+    assert "scoring.should_alert" in malicious_keys
+    assert "scoring.risk_score" in malicious_keys
+    assert "scoring.risk_level" in high_severity_keys
+    assert "scoring.risk_score" in high_severity_keys
+
+
 def test_find_similar_attack_patterns_delegates_to_central_query_module(monkeypatch):
     adapter = DashboardQueryAdapter(use_mock=True)
     _force_mongodb_mode(adapter)
