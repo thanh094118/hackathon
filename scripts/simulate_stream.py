@@ -55,8 +55,8 @@ log = logging.getLogger("stream_sim")
 # ── Defaults ─────────────────────────────────────────────────────────────────
 DEFAULT_CSV = PROJECT_ROOT / "data" / "input" / "data_capec_multilabel.csv"
 DEFAULT_BATCH_SIZE = 100
-DEFAULT_RATE = 10          # rows per second pushed by producer
-DEFAULT_CONSUMER_WAIT = 3  # seconds consumer waits for a full batch before flushing partial
+DEFAULT_RATE = 100          # rows per second pushed by producer
+DEFAULT_CONSUMER_WAIT = 1  # seconds consumer waits for a full batch before flushing partial
 DEFAULT_RULES = PROJECT_ROOT / "src" / "rules" / "attack_patterns.yaml"
 TEMP_DIR = PROJECT_ROOT / "data" / "raw" / "_stream_tmp"
 

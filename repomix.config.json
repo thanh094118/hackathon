@@ -33,7 +33,8 @@
       ".env.template",
       "a.puml",
       "convert.py",
-      "a.md"
+      "a.md",
+      "slide-deck/*"
     ]
   }
 }

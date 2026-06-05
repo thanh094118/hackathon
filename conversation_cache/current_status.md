@@ -146,3 +146,10 @@
   - **Smokescreen Protection (Contextual Risk Separation)**: Implemented priority risk scoring in `CorrelationEngine` and `IncidentManager`. If an incident contains requests targeting different endpoint groups, its risk score and severity are determined solely by the most sensitive group present, preventing attackers from diluting high-severity threats on sensitive resources using low-severity volume/noise on static/root resources.
   - **Verification**: Added 5 new tests to `tests/test_smart_alerting.py` (covering grouping, endpoint floors, smokescreen protection, and merge recalculation). All 309 repository tests passed.
 
+- **Dashboard Malicious Requests Statistics Fix (2026-05-31)**:
+  - Identified that the dashboard displayed `0` Malicious Requests because `DashboardQueryAdapter._malicious_match_query()` checked only Schema Version 1 (flat) fields, whereas the database collections were migrated to Schema Version 2 (nested).
+  - Modified `_malicious_match_query()` in [src/dashboard/query_adapter.py](file:///d:/Code/test/hackathon/src/dashboard/query_adapter.py) to support both nested and flat fields.
+  - Modified `get_soc_summary()` in `src/dashboard/query_adapter.py` to correctly query nested severity (`detection.rules.severity`) and risk score (`scoring.risk_score`) fields.
+  - Updated projections in fallback query wrappers (`get_attack_type_distribution`, `get_top_attacking_ips`, `get_attack_timeline`) to request nested sub-documents `detection` and `scoring`, enabling downstream functions to read these values correctly.
+  - Verified that `get_soc_summary` now reports correct counts of malicious requests (e.g. `18549` instead of `0`) and high severity incidents.
+  - Verified all 309 unit and integration tests continue to pass.

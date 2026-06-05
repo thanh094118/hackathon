@@ -93,3 +93,11 @@
   - [x] Implement dynamic, endpoint-group specific baselines and min floors.
   - [x] Implement Smokescreen Protection (Contextual Risk Separation).
   - [x] Write regression tests and verify all test suites.
+
+- [x] Resolve Malicious Requests displaying as 0 on the dashboard:
+  - [x] Diagnose schema discrepancy where `_malicious_match_query()` only checked flat fields while the database collections store nested Schema Version 2.
+  - [x] Modify `_malicious_match_query()` in `src/dashboard/query_adapter.py` to support both nested and flat layouts.
+  - [x] Update severity count checks in `get_soc_summary()` to check both nested and flat fields.
+  - [x] Adjust projection keys in fallback query adapters (`get_attack_type_distribution`, `get_top_attacking_ips`, `get_attack_timeline`) to include the nested `detection` and `scoring` objects.
+  - [x] Verify correct counts populate from a live database, showing `18549` malicious requests instead of `0`.
+  - [x] Run full test suites (`pytest -q`) and ensure all 309 tests pass successfully.

@@ -657,7 +657,9 @@ class DashboardQueryAdapter:
                             {
                                 "$or": [
                                     {"severity": {"$in": ["high", "critical", "HIGH", "CRITICAL"]}},
+                                    {"detection.rules.severity": {"$in": ["high", "critical", "HIGH", "CRITICAL"]}},
                                     {"risk_score": {"$gte": 80}},
+                                    {"scoring.risk_score": {"$gte": 80}},
                                 ]
                             },
                         ]
@@ -711,7 +713,12 @@ class DashboardQueryAdapter:
             records = self._find_many(
                 self.requests_collection_name,
                 self._combine_queries(tf_match, self._malicious_match_query()),
-                projection={"attack_type": 1, "ml_attack_type": 1, "prediction.attack_type": 1, "risk_score": 1, "prediction.label": 1, "ml_label": 1, "ml_should_alert": 1, "should_alert": 1},
+                projection={
+                    "attack_type": 1, "ml_attack_type": 1, "prediction.attack_type": 1,
+                    "risk_score": 1, "prediction.label": 1, "ml_label": 1,
+                    "ml_should_alert": 1, "should_alert": 1,
+                    "detection": 1, "scoring": 1
+                },
                 limit=20000,
                 sort=None,
             )
@@ -776,7 +783,12 @@ class DashboardQueryAdapter:
             records = self._find_many(
                 self.requests_collection_name,
                 self._combine_queries(tf_match, self._malicious_match_query()),
-                projection={"ip": 1, "source_ip": 1, "client_ip": 1, "attack_type": 1, "ml_attack_type": 1, "uri": 1, "timestamp": 1, "risk_score": 1, "prediction": 1, "ml_label": 1, "ml_should_alert": 1, "should_alert": 1},
+                projection={
+                    "ip": 1, "source_ip": 1, "client_ip": 1, "attack_type": 1,
+                    "ml_attack_type": 1, "uri": 1, "timestamp": 1, "risk_score": 1,
+                    "prediction": 1, "ml_label": 1, "ml_should_alert": 1, "should_alert": 1,
+                    "request": 1, "preprocessed": 1, "features": 1, "detection": 1, "scoring": 1, "embedding": 1
+                },
                 limit=20000,
                 sort=[("timestamp", -1)],
             )
@@ -858,7 +870,10 @@ class DashboardQueryAdapter:
         recent_records = self._find_many(
             self.requests_collection_name,
             self._combine_queries(tf_match, self._malicious_match_query()),
-            projection={"timestamp": 1, "attack_type": 1, "prediction": 1, "risk_score": 1, "ml_attack_type": 1},
+            projection={
+                "timestamp": 1, "attack_type": 1, "prediction": 1, "risk_score": 1, "ml_attack_type": 1,
+                "detection": 1, "scoring": 1
+            },
             limit=10000,
             sort=[("timestamp", 1)],
         )
@@ -1543,6 +1558,14 @@ class DashboardQueryAdapter:
     def _malicious_match_query() -> Dict[str, Any]:
         return {
             "$or": [
+                # Nested Schema V2 fields
+                {"detection.ml.label": {"$in": ["malicious", "suspicious", "attack"]}},
+                {"detection.ml.should_alert": True},
+                {"scoring.should_alert": True},
+                {"detection.rules.attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
+                {"detection.ml.attack_type": {"$exists": True, "$nin": [None, "", "Unknown", "unknown", "normal", "benign"]}},
+                {"scoring.risk_score": {"$gte": 70}},
+                # Flat/legacy/mock fields
                 {"prediction.label": {"$in": ["malicious", "suspicious", "attack"]}},
                 {"ml_label": {"$in": ["malicious", "suspicious", "attack"]}},
                 {"ml_should_alert": True},

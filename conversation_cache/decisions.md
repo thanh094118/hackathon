@@ -67,3 +67,7 @@
   - **Endpoint-Group Specific Baselines & Min Floors**: URIs are categorized into `sensitive`, `api`, `default`, and `root` groups. Aggregation calculates floors per group using a 90th percentile of traffic scaled by 10% (min 2). Falls back in memory to `sensitive`: 2, `api`: 20, `root`: 100.
   - **Smokescreen Protection (Contextual Risk Separation)**: The risk score and severity of an incident or merged incident are calculated solely on the subset of requests targeting the most sensitive endpoint group present (e.g. `sensitive` requests take priority over `root`), preventing attackers from masking malicious activities with high-volume low-priority noise.
 
+- **Dashboard Malicious Requests Statistics (2026-05-31)**:
+  - Database queries inside the dashboard adapter (`DashboardQueryAdapter`) must support both nested (V2) and flat (V1/mock) layouts.
+  - Queries using `_malicious_match_query` and count queries for SOC summaries must include conditions for both nested paths (`detection.ml.label`, `scoring.should_alert`, `detection.rules.severity`, `scoring.risk_score`) and flat fields (`prediction.label`, `should_alert`, `severity`, `risk_score`).
+  - Fallback queries that fetch documents for post-processing must include the nested `detection` and `scoring` fields in their projection keys to allow downstream data normalization functions to access nested metrics.
