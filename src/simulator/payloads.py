@@ -1,71 +1,50 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from urllib.parse import urlencode
 
 
 @dataclass(frozen=True)
 class AttackPayload:
-    attack_type: str
-    display_name: str
+    key: str
     method: str
-    uri: str
-    raw_request: str
-    risk_score: int
-    severity: str
-    prediction_score: float
-    mitre: list[str]
-    matched_pattern: str
-    recommendations: list[str]
+    path: str
+    query: dict[str, str]
+    user_agent: str
+
+    def encoded_uri(self) -> str:
+        query_string = urlencode(self.query, doseq=True)
+        return f"{self.path}?{query_string}" if query_string else self.path
 
 
 PAYLOADS: dict[str, AttackPayload] = {
-    "sqli": AttackPayload(
-        attack_type="SQLI",
-        display_name="SQL Injection",
+    "normal": AttackPayload(
+        key="normal",
         method="GET",
-        uri="/product?id=1 UNION SELECT username,password FROM users--",
-        raw_request="GET /product?id=1 UNION SELECT username,password FROM users-- HTTP/1.1",
-        risk_score=95,
-        severity="high",
-        prediction_score=0.96,
-        mitre=["T1190"],
-        matched_pattern="sqli_union_select",
-        recommendations=[
-            "Validate and parameterize database queries.",
-            "Inspect database access logs for related activity.",
-        ],
+        path="/",
+        query={},
+        user_agent="traffic-simulator-normal/1.0",
+    ),
+    "sqli": AttackPayload(
+        key="sqli",
+        method="GET",
+        path="/product",
+        query={"id": "1 UNION SELECT username,password FROM users--"},
+        user_agent="attack-simulator-sqli/1.0",
     ),
     "xss": AttackPayload(
-        attack_type="XSS",
-        display_name="Cross-Site Scripting",
+        key="xss",
         method="GET",
-        uri="/search?q=<script>alert(1)</script>",
-        raw_request="GET /search?q=<script>alert(1)</script> HTTP/1.1",
-        risk_score=90,
-        severity="high",
-        prediction_score=0.94,
-        mitre=["T1059"],
-        matched_pattern="xss_script_tag",
-        recommendations=[
-            "Validate and encode user-controlled output.",
-            "Review affected templates for unsafe rendering.",
-        ],
+        path="/search",
+        query={"q": "<script>alert(1)</script>"},
+        user_agent="attack-simulator-xss/1.0",
     ),
     "traversal": AttackPayload(
-        attack_type="TRAVERSAL",
-        display_name="Directory Traversal",
+        key="traversal",
         method="GET",
-        uri="/image?name=../../../../etc/passwd",
-        raw_request="GET /image?name=../../../../etc/passwd HTTP/1.1",
-        risk_score=88,
-        severity="high",
-        prediction_score=0.92,
-        mitre=["T1083"],
-        matched_pattern="traversal_dotdot",
-        recommendations=[
-            "Normalize and validate file paths server-side.",
-            "Restrict application filesystem access.",
-        ],
+        path="/image",
+        query={"name": "../../../../etc/passwd"},
+        user_agent="attack-simulator-traversal/1.0",
     ),
 }
 
@@ -76,15 +55,24 @@ def normalize_attack_type(attack_type: str) -> str:
         "sql": "sqli",
         "sql_injection": "sqli",
         "cross_site_scripting": "xss",
-        "path_traversal": "traversal",
         "directory_traversal": "traversal",
+        "path_traversal": "traversal",
     }
     return aliases.get(value, value)
 
 
 def get_payload(attack_type: str) -> AttackPayload:
-    normalized = normalize_attack_type(attack_type)
-    if normalized not in PAYLOADS:
+    key = normalize_attack_type(attack_type)
+    if key not in PAYLOADS:
         supported = ", ".join(sorted(PAYLOADS))
-        raise ValueError(f"Unsupported attack_type '{attack_type}'. Supported values: {supported}")
-    return PAYLOADS[normalized]
+        raise ValueError(f"Unsupported attack type '{attack_type}'. Supported: {supported}")
+    return PAYLOADS[key]
+
+
+def cycle_attack_types(attack_type: str, count: int) -> list[str]:
+    key = normalize_attack_type(attack_type)
+    safe_count = max(1, int(count))
+    if key != "all":
+        return [key] * safe_count
+    keys = [item for item in PAYLOADS if item != "normal"]
+    return [keys[index % len(keys)] for index in range(safe_count)]

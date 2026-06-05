@@ -31,7 +31,6 @@ output_test/
 venv
 .venv
 node_modules/
-src/simulator/
 src/notifications/
 package.json
 .antigravity-skills/

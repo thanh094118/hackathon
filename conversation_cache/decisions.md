@@ -71,3 +71,11 @@
   - Database queries inside the dashboard adapter (`DashboardQueryAdapter`) must support both nested (V2) and flat (V1/mock) layouts.
   - Queries using `_malicious_match_query` and count queries for SOC summaries must include conditions for both nested paths (`detection.ml.label`, `scoring.should_alert`, `detection.rules.severity`, `scoring.risk_score`) and flat fields (`prediction.label`, `should_alert`, `severity`, `risk_score`).
   - Fallback queries that fetch documents for post-processing must include the nested `detection` and `scoring` fields in their projection keys to allow downstream data normalization functions to access nested metrics.
+- Static dashboard exposure rules for stateful alerting and baselines (2026-06-05):
+  - `Correlated Incidents` in the static dashboard read exclusively from `GET /api/incidents/managed`; no separate managed-incident detail endpoint is introduced.
+  - The investigator UI shows all managed incident statuses (`cooldown/open` and resolved/suppressed) for SOC transparency.
+  - `Mark as False Positive` is exposed only for managed/correlated incidents in v1, not raw alerts.
+  - `Baseline Analytics` is a fixed last-24-hours view and intentionally does not reuse the global timeframe selector.
+  - Baseline charting is aggregated across endpoint groups by summing `mean + 3*std_dev` thresholds per hour-of-week bucket; endpoint-specific visibility remains in the floor table.
+  - Specific static routes under `/api/incidents/*` must be declared before dynamic `/api/incidents/{incident_id}` routes in FastAPI to avoid shadowing fixed endpoints like `/api/incidents/managed`.
+- Dashboard overview summary queries must treat nested Schema V2 fields under `detection.*` and `scoring.*` as the primary source of truth for malicious/high-severity counts; flat legacy fields are fallback compatibility only.

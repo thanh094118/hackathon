@@ -94,6 +94,19 @@
   - [x] Implement Smokescreen Protection (Contextual Risk Separation).
   - [x] Write regression tests and verify all test suites.
 
+- [x] Expose Stateful Alerting and Baseline Analytics in the static dashboard:
+  - [x] Extend `GET /api/baseline/status` with endpoint floors, 24h comparison series, and generation timestamp.
+  - [x] Add `POST /api/baseline/recalculate`.
+  - [x] Add centralized 24-point baseline comparison helper in `src/scoring/mongodb_queries.py`.
+  - [x] Add `Baseline Analytics` workspace to `src/dashboard/static/index.html`.
+  - [x] Add `Correlated Incidents` vs `Raw Security Alerts` mode switch in Threat Investigator.
+  - [x] Render managed incident details directly from `/api/incidents/managed`.
+  - [x] Add `Mark as False Positive` action for managed incidents only.
+  - [x] Add focused API coverage for baseline lazy materialization, recalculation, and false-positive routes.
+  - [x] Fix FastAPI route shadowing so `GET /api/incidents/managed` is not captured by `GET /api/incidents/{incident_id}`.
+  - [x] Fix overview malicious/high-severity counters to read nested Schema V2 fields (`detection.*`, `scoring.*`) instead of only legacy flat fields.
+  - [ ] Future: visually verify the updated static dashboard in a browser session against a live MongoDB-backed API.
+
 - [x] Resolve Malicious Requests displaying as 0 on the dashboard:
   - [x] Diagnose schema discrepancy where `_malicious_match_query()` only checked flat fields while the database collections store nested Schema Version 2.
   - [x] Modify `_malicious_match_query()` in `src/dashboard/query_adapter.py` to support both nested and flat layouts.

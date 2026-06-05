@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -1044,4 +1045,127 @@ def calculate_endpoint_min_floors(
         logging.error(f"Error in calculate_endpoint_min_floors: {e}")
         return {"status": "error", "message": str(e)}
 
+
+def get_baseline_comparison_last_24h(
+    db: Any,
+    *,
+    requests_collection: str = "requests",
+    baseline_collection: str = "attack_baselines",
+    sigma_multiplier: float = 3.0,
+    now: Optional[datetime] = None,
+) -> List[Dict[str, Any]]:
+    """Return a 24-point hourly comparison of actual alert counts vs baseline thresholds."""
+    baseline_coll = _collection(db, baseline_collection)
+    requests_coll = _collection(db, requests_collection)
+
+    current_time = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    end_hour = current_time.replace(minute=0, second=0, microsecond=0)
+    start_hour = end_hour - timedelta(hours=23)
+
+    thresholds_by_hour: Dict[int, float] = {}
+    if baseline_coll is not None:
+        try:
+            for doc in baseline_coll.find():
+                raw_key = doc.get("_id")
+                if isinstance(raw_key, dict):
+                    hour_of_week = _safe_int(raw_key.get("hour_of_week"), -1)
+                else:
+                    hour_of_week = _safe_int(raw_key, -1)
+                if hour_of_week < 0:
+                    continue
+                mean = float(doc.get("mean", 0.0) or 0.0)
+                std_dev = max(float(doc.get("std_dev", 0.0) or 0.0), 0.0)
+                thresholds_by_hour[hour_of_week] = thresholds_by_hour.get(hour_of_week, 0.0) + mean + (sigma_multiplier * std_dev)
+        except Exception as e:
+            logging.error(f"Error loading baseline thresholds: {e}")
+
+    actual_by_bucket: Dict[str, Dict[str, Any]] = {}
+    if requests_coll is not None:
+        pipeline = [
+            {"$match": _malicious_match_query()},
+            {
+                "$addFields": {
+                    "date_obj": {
+                        "$cond": {
+                            "if": {"$eq": [{"$type": "$timestamp"}, "date"]},
+                            "then": "$timestamp",
+                            "else": {
+                                "$dateFromString": {
+                                    "dateString": "$timestamp",
+                                    "onError": None,
+                                    "onNull": None,
+                                }
+                            },
+                        }
+                    }
+                }
+            },
+            {
+                "$match": {
+                    "date_obj": {
+                        "$gte": start_hour,
+                        "$lt": end_hour + timedelta(hours=1),
+                    }
+                }
+            },
+            {
+                "$project": {
+                    "hour_bucket": {
+                        "$dateToString": {
+                            "format": "%Y-%m-%dT%H:00:00Z",
+                            "date": "$date_obj",
+                        }
+                    },
+                    "hour_of_week": {
+                        "$add": [
+                            {"$multiply": [{"$subtract": [{"$dayOfWeek": "$date_obj"}, 1]}, 24]},
+                            {"$hour": "$date_obj"},
+                        ]
+                    },
+                    "day_of_week": {"$dayOfWeek": "$date_obj"},
+                    "hour": {"$hour": "$date_obj"},
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$hour_bucket",
+                    "count": {"$sum": 1},
+                    "hour_of_week": {"$first": "$hour_of_week"},
+                    "day_of_week": {"$first": "$day_of_week"},
+                    "hour": {"$first": "$hour"},
+                }
+            },
+        ]
+        try:
+            for row in requests_coll.aggregate(pipeline):
+                actual_by_bucket[str(row.get("_id"))] = {
+                    "count": _safe_int(row.get("count"), 0),
+                    "hour_of_week": _safe_int(row.get("hour_of_week"), -1),
+                    "day_of_week": _safe_int(row.get("day_of_week"), 0),
+                    "hour": _safe_int(row.get("hour"), 0),
+                }
+        except Exception as e:
+            logging.error(f"Error loading actual baseline comparison counts: {e}")
+
+    series: List[Dict[str, Any]] = []
+    for offset in range(24):
+        bucket_time = start_hour + timedelta(hours=offset)
+        bucket_key = bucket_time.strftime("%Y-%m-%dT%H:00:00Z")
+        sunday_based_day = (bucket_time.weekday() + 1) % 7
+        hour_of_week = (sunday_based_day * 24) + bucket_time.hour
+        mongo_day_of_week = sunday_based_day + 1
+        actual_row = actual_by_bucket.get(bucket_key, {})
+        series.append(
+            {
+                "timestamp": bucket_time.isoformat(),
+                "label": bucket_time.strftime("%H:00"),
+                "hour_of_week": hour_of_week,
+                "day_of_week": _safe_int(actual_row.get("day_of_week"), mongo_day_of_week),
+                "hour": _safe_int(actual_row.get("hour"), bucket_time.hour),
+                "actual_count": _safe_int(actual_row.get("count"), 0),
+                "threshold": round(float(thresholds_by_hour.get(hour_of_week, 0.0)), 2),
+            }
+        )
+
+    return series
 
