@@ -114,3 +114,9 @@
   - [x] Adjust projection keys in fallback query adapters (`get_attack_type_distribution`, `get_top_attacking_ips`, `get_attack_timeline`) to include the nested `detection` and `scoring` objects.
   - [x] Verify correct counts populate from a live database, showing `18549` malicious requests instead of `0`.
   - [x] Run full test suites (`pytest -q`) and ensure all 309 tests pass successfully.
+
+- [x] Resolve Merge Conflicts & Fix CLI Argument Parsing Tests:
+  - [x] Reconcile Git merge conflict in `src/dashboard/query_adapter.py` by consolidating nested Schema V2 and legacy flat-field match logic.
+  - [x] Stage and commit the merge, bringing the branch up to date with remote tracking branch `origin/main`.
+  - [x] Address outdated CLI argument expectation in `tests/test_attack_simulator.py` to align with the refactored `build_parser()` in `scripts/simulate_attacks.py`.
+  - [x] Verify that the full repository test suite (313 tests) builds and passes cleanly.

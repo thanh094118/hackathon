@@ -1,4 +1,11 @@
-# Current Status (2026-05-31)
+# Current Status (2026-06-06)
+
+- **Merge Conflict Resolution & Simulator Test Fix (2026-06-06)**:
+  - Reconciled Git merge conflicts in `src/dashboard/query_adapter.py` resulting from diverging branches (Schema V2 consolidation vs. remote updates).
+  - Fixed a broken test case (`test_cli_argument_parsing`) in `tests/test_attack_simulator.py` where CLI parameters expected by the test did not match the newly refactored parser (`build_parser`) in `scripts/simulate_attacks.py`.
+  - Staged all changes and finalized the merge commit successfully.
+  - Verification:
+    - Run the entire test suite `python -m pytest tests -q` successfully passing all 313 test cases.
 
 - **Dashboard Overview Malicious Count Fix (2026-06-06)**:
   - Fixed `Malicious Requests = 0` in the static dashboard overview.
