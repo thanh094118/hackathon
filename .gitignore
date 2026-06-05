@@ -37,4 +37,4 @@ package.json
 .agent/
 scripts/*
 slide-deck/
-./tmp
+.tmp/*
