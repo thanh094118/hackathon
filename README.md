@@ -117,31 +117,19 @@ ThreatLens follows a multi-stage pipeline that turns raw web logs into structure
 
 <img src="asset/system architecture.png" alt="ThreatLens System Architecture" />
 
-```mermaid
-graph TD
-    A[Raw Log File / Stream] --> B[Collector]
-    B --> C[Parser]
-    C --> D[Normalizer]
-    D --> E[Preprocessor]
-    E --> F[Rule Detector]
-    E --> G[Feature Extractor]
-    G --> H[ML Prediction Layer 1: 4-Gram Anomaly Detection]
-    H --> I[ML Prediction Layer 2: Attack Type Classification]
-    F --> J[Risk Scoring]
-    I --> J
-    J --> K[Correlation Engine]
-    K --> L[Incident Manager]
-    L --> M[MongoDB Export]
-    L --> N[Alert Dispatcher]
-    L --> O[SOC Dashboard]
-```
-
 In practice, the platform is split into two operational paths:
 
 - a **stateless ingestion path** for high-throughput log processing
 - a **stateful intelligence path** for incident correlation, baselining, and alert management
 
 The architecture is intentionally layered so that log ingestion, ML inference, rule matching, stateful alerting, and dashboard analytics can evolve independently without coupling the entire stack.
+
+Within the `MLPredictor` module, the AI flow is also two-stage:
+
+- `G --> H[ML Prediction Layer 1: 4-Gram Anomaly Detection]`
+- `H --> I[ML Prediction Layer 2: Attack Type Classification]`
+
+This matches the architecture shown in `asset/system architecture.png` and keeps the README aligned with the visual design used in the presentation materials.
 
 ---
 
