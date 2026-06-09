@@ -26,17 +26,11 @@ This is not just a log parser. It is a SOC copilot for web security operations.
 
 ## AI Model Design For Web Attack Prediction
 
-The AI layer is organized as a two-stage prediction system:
+The production ML layer is a **two-stage logistic-regression pipeline** built on handcrafted numeric features from the request preprocessor and feature extractor. The core predictor does **not** rely on n-gram classification in the main request-scoring path.
 
-### Layer 1: Anomaly Detection From 4-Gram Patterns
+### Layer 1: Binary Attack Detection
 
-The first model focuses on **behavioral anomaly detection** using 4-gram based request patterns. Its goal is to identify traffic that deviates from normal web request structure and surface suspicious payloads early.
-
-This layer is useful for:
-
-- spotting unusual request shapes
-- detecting obfuscation and evasive payload patterns
-- identifying requests that deserve deeper inspection
+The first model performs **binary classification** to decide whether a request is benign or attack-like. It uses the engineered feature vector generated from the normalized request, rather than raw text n-grams.
 
 ### Layer 2: Attack Type Classification
 
@@ -115,7 +109,7 @@ Credentials are stored securely and can be tested from the UI.
 
 ThreatLens follows a multi-stage pipeline that turns raw web logs into structured intelligence for detection, correlation, and response.
 
-<img src="asset/system architecture.png" alt="ThreatLens System Architecture" />
+<img src="asset/system%20architecture.png" alt="ThreatLens System Architecture" />
 
 In practice, the platform is split into two operational paths:
 
@@ -126,7 +120,7 @@ The architecture is intentionally layered so that log ingestion, ML inference, r
 
 Within the `MLPredictor` module, the AI flow is also two-stage:
 
-- `G --> H[ML Prediction Layer 1: 4-Gram Anomaly Detection]`
+- `G --> H[ML Prediction Layer 1: Binary Attack Detection]`
 - `H --> I[ML Prediction Layer 2: Attack Type Classification]`
 
 This matches the architecture shown in `asset/system architecture.png` and keeps the README aligned with the visual design used in the presentation materials.
@@ -137,7 +131,7 @@ This matches the architecture shown in `asset/system architecture.png` and keeps
 
 MongoDB Atlas is the system's operational data backbone. It stores both the raw analytical records and the stateful security objects used by the dashboard and alerting engine.
 
-<img src="asset/mongodb architecture.png" alt="ThreatLens MongoDB Architecture" />
+<img src="asset/mongodb%20architecture.png" alt="ThreatLens MongoDB Architecture" />
 
 ### Core Collections And Their Roles
 
@@ -302,9 +296,25 @@ DASHBOARD_USE_MOCK=1 python -m src.dashboard.server
 
 ---
 
-## Output Artifacts
+## Operational Data And Optional Debug Output
 
-The pipeline writes module-specific outputs under `outputs/`:
+ThreatLens is designed as a MongoDB-backed end-to-end system. In the normal operational flow, the primary runtime data lives in Atlas collections rather than in local project artifacts.
+
+### MongoDB Collections Used In The Main Flow
+
+- `requests`
+- `incidents`
+- `managed_incidents`
+- `active_campaigns`
+- `attack_baselines`
+- `endpoint_min_floors`
+- `alert_settings`
+- `false_positives`
+- `pipeline_runs`
+
+### Optional Local Debug Export
+
+If you need offline inspection or stage-level debugging, the pipeline can still export local artifacts with `--debug-local`. In that mode, it writes the familiar stage outputs under `outputs/`:
 
 - `collector_results/*_raw_lines.jsonl`
 - `parser_results/*_parsed_logs.jsonl`
