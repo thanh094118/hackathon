@@ -113,31 +113,56 @@ Credentials are stored securely and can be tested from the UI.
 
 ## System Architecture
 
-ThreatLens follows a multi-stage pipeline:
+ThreatLens follows a multi-stage pipeline that turns raw web logs into structured intelligence for detection, correlation, and response.
 
-```mermaid
-graph TD
-    A[Raw Log File / Stream] --> B[Collector]
-    B --> C[Parser]
-    C --> D[Normalizer]
-    D --> E[Preprocessor]
-    E --> F[Rule Detector]
-    E --> G[Feature Extractor]
-    G --> H[ML Prediction Layer 1: 4-Gram Anomaly Detection]
-    H --> I[ML Prediction Layer 2: Attack Type Classification]
-    F --> J[Risk Scoring]
-    I --> J
-    J --> K[Correlation Engine]
-    K --> L[Incident Manager]
-    L --> M[MongoDB Export]
-    L --> N[Alert Dispatcher]
-    L --> O[SOC Dashboard]
-```
+<img src="asset/system architecture.png" alt="ThreatLens System Architecture" />
 
 In practice, the platform is split into two operational paths:
 
 - a **stateless ingestion path** for high-throughput log processing
 - a **stateful intelligence path** for incident correlation, baselining, and alert management
+
+The architecture is intentionally layered so that log ingestion, ML inference, rule matching, stateful alerting, and dashboard analytics can evolve independently without coupling the entire stack.
+
+Within the `MLPredictor` module, the AI flow is also two-stage:
+
+- `G --> H[ML Prediction Layer 1: 4-Gram Anomaly Detection]`
+- `H --> I[ML Prediction Layer 2: Attack Type Classification]`
+
+This matches the architecture shown in `asset/system architecture.png` and keeps the README aligned with the visual design used in the presentation materials.
+
+---
+
+## MongoDB Architecture
+
+MongoDB Atlas is the system's operational data backbone. It stores both the raw analytical records and the stateful security objects used by the dashboard and alerting engine.
+
+<img src="asset/mongodb architecture.png" alt="ThreatLens MongoDB Architecture" />
+
+### Core Collections And Their Roles
+
+- `requests`: the main web-log intelligence store used for analytics, baselines, and campaign detection
+- `incidents`: correlated incident records produced by the stateful alerting layer
+- `managed_incidents`: analyst-managed incident feed used by the Threat Investigator UI
+- `active_campaigns`: materialized campaign summaries for fast dashboard reads
+- `attack_baselines`: hourly baseline thresholds used by the baseline analytics view
+- `endpoint_min_floors`: minimum traffic floors per endpoint group
+- `alert_settings`: encrypted alert delivery settings for Email, Telegram, and Slack
+- `false_positives`: suppression history used to reduce repeated false alerts
+
+### Why This Layer Matters
+
+- It enables **fast dashboard reads** while still supporting **interactive analytical queries**
+- It supports **stateful alerting**, including cooldown tracking and incident merging
+- It keeps **baseline analytics** and **campaign detection** materialized for operational speed
+- It centralizes **alert credential management** and preserves secrets with encryption
+
+This database layout is a key part of the SOC workflow because it separates:
+
+- raw detection data
+- analyst-facing incident state
+- precomputed analytics
+- secured operational settings
 
 ---
 
@@ -338,4 +363,3 @@ pytest -q tests/test_collector.py
 - The dashboard can operate in mock mode when MongoDB is unavailable.
 - The alert settings UI stores secrets securely and only exposes masked/public status values.
 - The platform is intended for SOC operations on web application traffic and log-driven threat detection.
-
